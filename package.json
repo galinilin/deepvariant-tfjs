@@ -1,0 +1,27 @@
+{
+  "name": "dv-browser",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "DeepVariant 1.8 WGS InceptionV3 inference in the browser via TensorFlow.js + Vue 3.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "vue-tsc --noEmit",
+    "sync-models": "bash scripts/sync-models.sh",
+    "predeploy": "bash scripts/sync-models.sh uint8-only && npm run build",
+    "deploy": "gh-pages -d dist --dotfiles --branch gh-pages --message 'deploy: deepvariant-tfjs site'"
+  },
+  "dependencies": {
+    "@tensorflow/tfjs": "4.22.0",
+    "vue": "^3.5.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.1.0",
+    "gh-pages": "^6.3.0",
+    "typescript": "~5.6.0",
+    "vite": "^5.4.0",
+    "vue-tsc": "^2.1.0"
+  }
+}
