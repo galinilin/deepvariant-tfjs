@@ -9,8 +9,8 @@ export class Camera {
   x = 0;
   y = 0;
   zoom = 1;
-  minZoom = 0.05;
-  maxZoom = 20;
+  minZoom = 0.3;
+  maxZoom = 3;
 
   apply(p: p5): void {
     p.translate(this.x, this.y);

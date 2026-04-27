@@ -14,12 +14,10 @@ const LABEL_COLOR: [number, number, number] = [210, 210, 210];
 const BORDER_COLOR: [number, number, number] = [48, 48, 48];
 
 export interface RefState {
-  reference: Base[];
-  windowStart: number;
   origin: { x: number; y: number };
 }
 
-export function drawRef(p: p5, state: RefState): void {
+export function drawRefFrame(p: p5, state: RefState): void {
   const { x, y } = state.origin;
   const w = REF_COUNT * CELL_W;
   const h = CELL_H;
@@ -36,14 +34,23 @@ export function drawRef(p: p5, state: RefState): void {
   p.stroke(BORDER_COLOR[0], BORDER_COLOR[1], BORDER_COLOR[2]);
   p.strokeWeight(0.5);
   p.rect(x, y, w, h);
+}
 
-  p.noStroke();
-  p.textSize(BASE_SIZE);
-  p.textAlign(p.CENTER, p.CENTER);
+/** Paints the ref bases onto any p5-compatible draw target (canvas or offscreen graphics). */
+export function paintRefBases(
+  target: p5 | p5.Graphics,
+  reference: Base[],
+  windowStart: number,
+): void {
+  target.noStroke();
+  target.textFont('Inconsolata');
+  target.textStyle(target.NORMAL);
+  target.textSize(BASE_SIZE);
+  target.textAlign(target.CENTER, target.CENTER);
   for (let i = 0; i < REF_COUNT; i++) {
-    const base: Base = state.reference[state.windowStart + i] ?? 'N';
-    const col = igvColor(base);
-    p.fill(col[0], col[1], col[2]);
-    p.text(base, x + i * CELL_W + CELL_W / 2, y + CELL_H / 2 + 1);
+    const base: Base = reference[windowStart + i] ?? 'N';
+    const c = igvColor(base);
+    target.fill(c[0], c[1], c[2]);
+    target.text(base, i * CELL_W + CELL_W / 2, CELL_H / 2 + 1);
   }
 }

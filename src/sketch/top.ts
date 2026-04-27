@@ -1,6 +1,13 @@
 import p5 from 'p5';
 import { Camera } from '../world/camera';
-import { drawRef, REF_COUNT, CELL_W, CELL_H } from '../world/regions/ref';
+import { TieredCache } from '../world/cache';
+import {
+  drawRefFrame,
+  paintRefBases,
+  REF_COUNT,
+  CELL_W,
+  CELL_H,
+} from '../world/regions/ref';
 import {
   SCRUBBER_HEIGHT,
   drawScrubber,
@@ -44,6 +51,8 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
 
     let dragMode: 'pan' | 'scrubber' = 'pan';
 
+    let refCache: TieredCache | null = null;
+
     const scrubberState = () => ({
       reference,
       windowStart,
@@ -52,7 +61,10 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
     });
 
     const setWindow = (next: number) => {
-      windowStart = clampWindowStart(next, reference.length);
+      const clamped = clampWindowStart(next, reference.length);
+      if (clamped === windowStart) return;
+      windowStart = clamped;
+      refCache?.invalidate();
     };
 
     const initializeView = () => {
@@ -64,22 +76,10 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
       cam.x = (w - cw) / 2;
       cam.y = (h - ch) / 2;
       windowStart = defaultWindowStart(reference.length);
+      refCache?.invalidate();
     };
 
-    resetFn = initializeView;
-
-    p.setup = () => {
-      const { w, h } = size();
-      p.createCanvas(w, h);
-      p.pixelDensity(p.displayDensity());
-      p.textFont('Inconsolata');
-      initializeView();
-    };
-
-    p.windowResized = () => {
-      const { w, h } = size();
-      p.resizeCanvas(w, h);
-    };
+    resetFn = () => initializeView();
 
     const drawWindowFunnel = () => {
       const winLeft =
@@ -99,13 +99,32 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
       p.line(winRight, top, refRight, bottom);
     };
 
+    p.setup = () => {
+      const { w, h } = size();
+      p.createCanvas(w, h);
+      p.pixelDensity(p.displayDensity());
+      p.textFont('Inconsolata');
+      refCache = new TieredCache(p, refWidth, CELL_H, (target) =>
+        paintRefBases(target, reference, windowStart),
+      );
+      initializeView();
+    };
+
+    p.windowResized = () => {
+      const { w, h } = size();
+      p.resizeCanvas(w, h);
+    };
+
     p.draw = () => {
       p.background(0);
       p.push();
       cam.apply(p);
       drawScrubber(p, scrubberState());
       drawWindowFunnel();
-      drawRef(p, { reference, windowStart, origin: refOrigin });
+      drawRefFrame(p, { origin: refOrigin });
+      if (refCache) {
+        p.image(refCache.get(cam.zoom), refOrigin.x, refOrigin.y, refWidth, CELL_H);
+      }
       drawRuler(p, {
         windowStart,
         origin: rulerOrigin,
