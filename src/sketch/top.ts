@@ -7,7 +7,9 @@ import {
   isInsideScrubber,
   windowStartFromWorldX,
 } from '../world/regions/scrubber';
+import { RULER_HEIGHT, drawRuler } from '../world/regions/ruler';
 import {
+  WINDOW_LENGTH,
   buildReference,
   clampWindowStart,
   defaultWindowStart,
@@ -18,7 +20,7 @@ export interface SketchHandle {
   destroy: () => void;
 }
 
-const REF_GAP = 28;
+const REF_GAP = 80;
 
 export function mountTopSketch(container: HTMLElement): SketchHandle {
   let resetFn: () => void = () => {};
@@ -33,10 +35,12 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
     const reference = buildReference();
     let windowStart = defaultWindowStart(reference.length);
 
-    const contentWidth = REF_COUNT * CELL_W;
-    const scrubberOrigin = { x: 0, y: 0 };
+    const refWidth = REF_COUNT * CELL_W;
+    const scrubberWidth = refWidth * 0.8;
+    const scrubberOrigin = { x: (refWidth - scrubberWidth) / 2, y: 0 };
     const refOrigin = { x: 0, y: SCRUBBER_HEIGHT + REF_GAP };
-    const totalHeight = SCRUBBER_HEIGHT + REF_GAP + CELL_H;
+    const rulerOrigin = { x: 0, y: refOrigin.y + CELL_H };
+    const totalHeight = SCRUBBER_HEIGHT + REF_GAP + CELL_H + RULER_HEIGHT;
 
     let dragMode: 'pan' | 'scrubber' = 'pan';
 
@@ -44,7 +48,7 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
       reference,
       windowStart,
       origin: scrubberOrigin,
-      width: contentWidth,
+      width: scrubberWidth,
     });
 
     const setWindow = (next: number) => {
@@ -53,9 +57,9 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
 
     const initializeView = () => {
       const { w, h } = size();
-      const fitZoom = Math.min(1, (w - 80) / contentWidth);
+      const fitZoom = Math.min(1, (w - 220) / refWidth);
       cam.zoom = Math.max(cam.minZoom, fitZoom);
-      const cw = contentWidth * cam.zoom;
+      const cw = refWidth * cam.zoom;
       const ch = totalHeight * cam.zoom;
       cam.x = (w - cw) / 2;
       cam.y = (h - ch) / 2;
@@ -77,12 +81,37 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
       p.resizeCanvas(w, h);
     };
 
+    const drawWindowFunnel = () => {
+      const winLeft =
+        scrubberOrigin.x + (windowStart / reference.length) * scrubberWidth;
+      const winRight =
+        scrubberOrigin.x +
+        ((windowStart + WINDOW_LENGTH) / reference.length) * scrubberWidth;
+      const top = scrubberOrigin.y + SCRUBBER_HEIGHT;
+      const bottom = refOrigin.y;
+      const refLeft = refOrigin.x;
+      const refRight = refOrigin.x + REF_COUNT * CELL_W;
+
+      p.noFill();
+      p.stroke(220, 220, 220, 180);
+      p.strokeWeight(1.4 / cam.zoom);
+      p.line(winLeft, top, refLeft, bottom);
+      p.line(winRight, top, refRight, bottom);
+    };
+
     p.draw = () => {
       p.background(0);
       p.push();
       cam.apply(p);
       drawScrubber(p, scrubberState());
+      drawWindowFunnel();
       drawRef(p, { reference, windowStart, origin: refOrigin });
+      drawRuler(p, {
+        windowStart,
+        origin: rulerOrigin,
+        cellWidth: CELL_W,
+        zoom: cam.zoom,
+      });
       p.pop();
     };
 

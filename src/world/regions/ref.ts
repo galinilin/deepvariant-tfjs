@@ -6,7 +6,7 @@ export const REF_COUNT = WINDOW_LENGTH;
 export const CELL_W = 14;
 export const CELL_H = 26;
 
-const HEADER_GAP = 8;
+const LABEL_GAP = 12;
 const LABEL_SIZE = 14;
 const BASE_SIZE = 16;
 
@@ -29,8 +29,8 @@ export function drawRef(p: p5, state: RefState): void {
   p.textFont('Inconsolata');
   p.textStyle(p.NORMAL);
   p.textSize(LABEL_SIZE);
-  p.textAlign(p.LEFT, p.BOTTOM);
-  p.text('Ref', x, y - HEADER_GAP);
+  p.textAlign(p.RIGHT, p.CENTER);
+  p.text('Ref', x - LABEL_GAP, y + h / 2);
 
   p.noFill();
   p.stroke(BORDER_COLOR[0], BORDER_COLOR[1], BORDER_COLOR[2]);
