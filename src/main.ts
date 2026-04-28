@@ -10,3 +10,6 @@ mountBottomSketch(bottomEl);
 
 const resetBtn = document.getElementById('reset-view');
 resetBtn?.addEventListener('click', () => top.resetView());
+
+const randomizeBtn = document.getElementById('randomize');
+randomizeBtn?.addEventListener('click', () => top.randomize());

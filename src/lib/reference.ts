@@ -1,6 +1,6 @@
 import type { Base } from './palette';
 
-export const DEFAULT_REFERENCE_LENGTH = 600;
+export const DEFAULT_REFERENCE_LENGTH = 900;
 export const WINDOW_LENGTH = 221;
 
 const BASES: Base[] = ['A', 'C', 'G', 'T'];

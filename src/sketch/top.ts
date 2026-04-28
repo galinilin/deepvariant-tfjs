@@ -21,23 +21,29 @@ import {
   paintReadsBases,
 } from '../world/regions/reads';
 import {
+  DEFAULT_REFERENCE_LENGTH,
   WINDOW_LENGTH,
   buildReference,
   clampWindowStart,
   defaultWindowStart,
 } from '../lib/reference';
-import { buildReads } from '../lib/reads';
+import { buildReads, makeRng, type Read } from '../lib/reads';
+import { placeScenarios, type Scenario } from '../lib/scenarios';
+import type { Base } from '../lib/palette';
 
 export interface SketchHandle {
   resetView: () => void;
+  randomize: () => void;
   destroy: () => void;
 }
 
 const REF_GAP = 80;
 const READS_GAP = 18;
+const INITIAL_SEED = 42;
 
 export function mountTopSketch(container: HTMLElement): SketchHandle {
   let resetFn: () => void = () => {};
+  let randomizeFn: () => void = () => {};
 
   const size = () => ({
     w: container.clientWidth,
@@ -46,13 +52,26 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
 
   const instance = new p5((p: p5) => {
     const cam = new Camera();
-    const reference = buildReference();
-    const reads = buildReads(reference);
-    let windowStart = defaultWindowStart(reference.length);
+
+    let reference: Base[] = [];
+    let scenarios: Scenario[] = [];
+    let reads: Read[] = [];
+    let windowStart = 0;
+
+    const generateWorld = (seed: number) => {
+      const rng = makeRng(seed);
+      reference = buildReference(DEFAULT_REFERENCE_LENGTH, seed);
+      scenarios = placeScenarios(reference, rng);
+      reads = buildReads(reference, scenarios, rng);
+    };
+
+    generateWorld(INITIAL_SEED);
+    windowStart = defaultWindowStart(reference.length);
 
     const refWidth = REF_COUNT * CELL_W;
     const fullPileupWidth = reference.length * CELL_W;
-    const readsHeight = reads.length * READ_ROW_H;
+    const READ_COUNT = reads.length;
+    const readsHeight = READ_COUNT * READ_ROW_H;
     const scrubberWidth = refWidth * 0.8;
 
     const scrubberOrigin = { x: (refWidth - scrubberWidth) / 2, y: 0 };
@@ -63,7 +82,6 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
       SCRUBBER_HEIGHT + REF_GAP + CELL_H + RULER_HEIGHT + READS_GAP + readsHeight;
 
     let dragMode: 'pan' | 'scrubber' = 'pan';
-
     let refCache: TieredCache | null = null;
     let readsCache: p5.Graphics | null = null;
 
@@ -72,12 +90,35 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
       windowStart,
       origin: scrubberOrigin,
       width: scrubberWidth,
+      scenarios,
     });
 
     const setWindow = (next: number) => {
       const clamped = clampWindowStart(next, reference.length);
       if (clamped === windowStart) return;
       windowStart = clamped;
+    };
+
+    const snapWindowToScenarios = (candidateStart: number): number => {
+      if (scenarios.length === 0) return candidateStart;
+      const candidateCenter = candidateStart + WINDOW_LENGTH / 2;
+      const snapThresholdBp =
+        (8 / cam.zoom) * (reference.length / scrubberWidth);
+      let bestStart = candidateStart;
+      let bestDistance = snapThresholdBp;
+      for (const sc of scenarios) {
+        const distance = Math.abs(sc.position - candidateCenter);
+        if (distance <= bestDistance) {
+          bestDistance = distance;
+          bestStart = sc.position - Math.floor(WINDOW_LENGTH / 2);
+        }
+      }
+      return bestStart;
+    };
+
+    const handleScrubberWorldX = (wx: number) => {
+      const candidate = windowStartFromWorldX(scrubberState(), wx);
+      setWindow(snapWindowToScenarios(candidate));
     };
 
     const initializeView = () => {
@@ -105,6 +146,26 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
       paintReadsBases(readsCache, reads, CELL_W);
     };
 
+    const randomize = () => {
+      const seed = Math.floor(Math.random() * 0x7fffffff) || 1;
+      generateWorld(seed);
+
+      if (scenarios.length > 0) {
+        const pick = scenarios[Math.floor(Math.random() * scenarios.length)];
+        windowStart = clampWindowStart(
+          pick.position - Math.floor(WINDOW_LENGTH / 2),
+          reference.length,
+        );
+      } else {
+        windowStart = defaultWindowStart(reference.length);
+      }
+
+      refCache?.invalidate();
+      buildReadsCache();
+    };
+
+    randomizeFn = randomize;
+
     const drawWindowFunnel = () => {
       const winLeft =
         scrubberOrigin.x + (windowStart / reference.length) * scrubberWidth;
@@ -124,18 +185,26 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
     };
 
     const drawPredictMarker = () => {
-      const colIdx = Math.floor(WINDOW_LENGTH / 2); // 110
+      const colIdx = Math.floor(WINDOW_LENGTH / 2);
       const x = refOrigin.x + colIdx * CELL_W + CELL_W / 2;
       const margin = 6 / cam.zoom;
       const top = refOrigin.y - margin;
       const bottom = readsOrigin.y + readsHeight + margin;
 
-      // Vertical guide line
+      // Connector from window center on scrubber down to the predict line top
+      const winCenterX =
+        scrubberOrigin.x +
+        ((windowStart + WINDOW_LENGTH / 2) / reference.length) * scrubberWidth;
+      const winBottom = scrubberOrigin.y + SCRUBBER_HEIGHT;
+
       p.stroke(255, 220, 110, 120);
       p.strokeWeight(1 / cam.zoom);
+      p.line(winCenterX, winBottom, x, top);
+
+      // Vertical predict line through Ref + Reads
       p.line(x, top, x, bottom);
 
-      // Top-down arrow: tip at the top of the line, base above
+      // Top-down arrow at the line's top
       const triHalfW = 5 / cam.zoom;
       const triH = 7 / cam.zoom;
       p.noStroke();
@@ -161,8 +230,6 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
       buildReadsCache();
       initializeView();
 
-      // If Inconsolata wasn't loaded when caches were first built, rebuild
-      // them once the font is ready so letters render in Inconsolata.
       void document.fonts.ready.then(() => {
         refCache?.invalidate();
         buildReadsCache();
@@ -179,7 +246,7 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
       p.push();
       cam.apply(p);
 
-      drawScrubber(p, scrubberState());
+      drawScrubber(p, scrubberState(), cam.zoom);
       drawWindowFunnel();
 
       drawRefFrame(p, { origin: refOrigin });
@@ -206,7 +273,7 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
 
       drawReadsFrame(p, {
         origin: readsOrigin,
-        readsCount: reads.length,
+        readsCount: READ_COUNT,
         width: refWidth,
       });
       if (readsCache) {
@@ -232,7 +299,7 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
       const wp = cam.screenToWorld(p.mouseX, p.mouseY);
       if (isInsideScrubber(scrubberState(), wp.x, wp.y)) {
         dragMode = 'scrubber';
-        setWindow(windowStartFromWorldX(scrubberState(), wp.x));
+        handleScrubberWorldX(wp.x);
       } else {
         dragMode = 'pan';
       }
@@ -241,7 +308,7 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
     p.mouseDragged = () => {
       if (dragMode === 'scrubber') {
         const wp = cam.screenToWorld(p.mouseX, p.mouseY);
-        setWindow(windowStartFromWorldX(scrubberState(), wp.x));
+        handleScrubberWorldX(wp.x);
       } else {
         cam.pan(p.movedX, p.movedY);
       }
@@ -257,6 +324,7 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
 
   return {
     resetView: () => resetFn(),
+    randomize: () => randomizeFn(),
     destroy: () => instance.remove(),
   };
 }
