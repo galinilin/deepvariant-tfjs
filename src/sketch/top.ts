@@ -16,11 +16,17 @@ import {
 } from '../world/regions/scrubber';
 import { RULER_HEIGHT, drawRuler } from '../world/regions/ruler';
 import {
+  READ_ROW_H,
+  drawReadsFrame,
+  paintReadsBases,
+} from '../world/regions/reads';
+import {
   WINDOW_LENGTH,
   buildReference,
   clampWindowStart,
   defaultWindowStart,
 } from '../lib/reference';
+import { buildReads } from '../lib/reads';
 
 export interface SketchHandle {
   resetView: () => void;
@@ -28,6 +34,7 @@ export interface SketchHandle {
 }
 
 const REF_GAP = 80;
+const READS_GAP = 18;
 
 export function mountTopSketch(container: HTMLElement): SketchHandle {
   let resetFn: () => void = () => {};
@@ -40,18 +47,25 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
   const instance = new p5((p: p5) => {
     const cam = new Camera();
     const reference = buildReference();
+    const reads = buildReads(reference);
     let windowStart = defaultWindowStart(reference.length);
 
     const refWidth = REF_COUNT * CELL_W;
+    const fullPileupWidth = reference.length * CELL_W;
+    const readsHeight = reads.length * READ_ROW_H;
     const scrubberWidth = refWidth * 0.8;
+
     const scrubberOrigin = { x: (refWidth - scrubberWidth) / 2, y: 0 };
     const refOrigin = { x: 0, y: SCRUBBER_HEIGHT + REF_GAP };
     const rulerOrigin = { x: 0, y: refOrigin.y + CELL_H };
-    const totalHeight = SCRUBBER_HEIGHT + REF_GAP + CELL_H + RULER_HEIGHT;
+    const readsOrigin = { x: 0, y: rulerOrigin.y + RULER_HEIGHT + READS_GAP };
+    const totalHeight =
+      SCRUBBER_HEIGHT + REF_GAP + CELL_H + RULER_HEIGHT + READS_GAP + readsHeight;
 
     let dragMode: 'pan' | 'scrubber' = 'pan';
 
     let refCache: TieredCache | null = null;
+    let readsCache: p5.Graphics | null = null;
 
     const scrubberState = () => ({
       reference,
@@ -64,22 +78,32 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
       const clamped = clampWindowStart(next, reference.length);
       if (clamped === windowStart) return;
       windowStart = clamped;
-      refCache?.invalidate();
     };
 
     const initializeView = () => {
       const { w, h } = size();
-      const fitZoom = Math.min(1, (w - 220) / refWidth);
+      const fitZoomW = (w - 220) / refWidth;
+      const fitZoomH = (h - 80) / totalHeight;
+      const fitZoom = Math.min(1, Math.min(fitZoomW, fitZoomH));
       cam.zoom = Math.max(cam.minZoom, fitZoom);
       const cw = refWidth * cam.zoom;
       const ch = totalHeight * cam.zoom;
       cam.x = (w - cw) / 2;
       cam.y = (h - ch) / 2;
       windowStart = defaultWindowStart(reference.length);
-      refCache?.invalidate();
     };
 
     resetFn = () => initializeView();
+
+    const buildReadsCache = () => {
+      if (!readsCache) {
+        readsCache = p.createGraphics(fullPileupWidth, readsHeight);
+        readsCache.pixelDensity(2);
+        readsCache.textFont('Inconsolata');
+      }
+      readsCache.clear();
+      paintReadsBases(readsCache, reads, CELL_W);
+    };
 
     const drawWindowFunnel = () => {
       const winLeft =
@@ -104,10 +128,18 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
       p.createCanvas(w, h);
       p.pixelDensity(p.displayDensity());
       p.textFont('Inconsolata');
-      refCache = new TieredCache(p, refWidth, CELL_H, (target) =>
-        paintRefBases(target, reference, windowStart),
+      refCache = new TieredCache(p, fullPileupWidth, CELL_H, (target) =>
+        paintRefBases(target, reference),
       );
+      buildReadsCache();
       initializeView();
+
+      // If Inconsolata wasn't loaded when caches were first built, rebuild
+      // them once the font is ready so letters render in Inconsolata.
+      void document.fonts.ready.then(() => {
+        refCache?.invalidate();
+        buildReadsCache();
+      });
     };
 
     p.windowResized = () => {
@@ -119,18 +151,51 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
       p.background(0);
       p.push();
       cam.apply(p);
+
       drawScrubber(p, scrubberState());
       drawWindowFunnel();
+
       drawRefFrame(p, { origin: refOrigin });
       if (refCache) {
-        p.image(refCache.get(cam.zoom), refOrigin.x, refOrigin.y, refWidth, CELL_H);
+        p.image(
+          refCache.get(cam.zoom),
+          refOrigin.x,
+          refOrigin.y,
+          refWidth,
+          CELL_H,
+          windowStart * CELL_W,
+          0,
+          WINDOW_LENGTH * CELL_W,
+          CELL_H,
+        );
       }
+
       drawRuler(p, {
         windowStart,
         origin: rulerOrigin,
         cellWidth: CELL_W,
         zoom: cam.zoom,
       });
+
+      drawReadsFrame(p, {
+        origin: readsOrigin,
+        readsCount: reads.length,
+        width: refWidth,
+      });
+      if (readsCache) {
+        p.image(
+          readsCache,
+          readsOrigin.x,
+          readsOrigin.y,
+          refWidth,
+          readsHeight,
+          windowStart * CELL_W,
+          0,
+          WINDOW_LENGTH * CELL_W,
+          readsHeight,
+        );
+      }
+
       p.pop();
     };
 
