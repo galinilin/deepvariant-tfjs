@@ -143,7 +143,7 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
         readsCache.textFont('Inconsolata');
       }
       readsCache.clear();
-      paintReadsBases(readsCache, reads, CELL_W);
+      paintReadsBases(readsCache, reads, reference, CELL_W);
     };
 
     const randomize = () => {
