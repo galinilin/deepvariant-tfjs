@@ -123,6 +123,33 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
       p.line(winRight, top, refRight, bottom);
     };
 
+    const drawPredictMarker = () => {
+      const colIdx = Math.floor(WINDOW_LENGTH / 2); // 110
+      const x = refOrigin.x + colIdx * CELL_W + CELL_W / 2;
+      const margin = 6 / cam.zoom;
+      const top = refOrigin.y - margin;
+      const bottom = readsOrigin.y + readsHeight + margin;
+
+      // Vertical guide line
+      p.stroke(255, 220, 110, 120);
+      p.strokeWeight(1 / cam.zoom);
+      p.line(x, top, x, bottom);
+
+      // Top-down arrow: tip at the top of the line, base above
+      const triHalfW = 5 / cam.zoom;
+      const triH = 7 / cam.zoom;
+      p.noStroke();
+      p.fill(255, 220, 110, 200);
+      p.triangle(
+        x - triHalfW,
+        top - triH,
+        x + triHalfW,
+        top - triH,
+        x,
+        top,
+      );
+    };
+
     p.setup = () => {
       const { w, h } = size();
       p.createCanvas(w, h);
@@ -195,6 +222,8 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
           readsHeight,
         );
       }
+
+      drawPredictMarker();
 
       p.pop();
     };

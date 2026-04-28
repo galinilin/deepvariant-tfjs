@@ -27,8 +27,8 @@ export function drawReadsFrame(p: p5, state: ReadsState): void {
   p.textFont('Inconsolata');
   p.textStyle(p.NORMAL);
   p.textSize(LABEL_SIZE);
-  p.textAlign(p.RIGHT, p.CENTER);
-  p.text('Reads', x - LABEL_GAP, y + h / 2);
+  p.textAlign(p.RIGHT, p.TOP);
+  p.text('Reads', x - LABEL_GAP, y);
 
   p.noFill();
   p.stroke(BORDER_COLOR[0], BORDER_COLOR[1], BORDER_COLOR[2]);
