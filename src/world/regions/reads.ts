@@ -14,7 +14,8 @@ const BORDER_COLOR: [number, number, number] = [48, 48, 48];
 const PANEL_COLOR: [number, number, number] = [10, 10, 12];
 const FORWARD_STRAND_COLOR: [number, number, number] = [105, 112, 130];
 const REVERSE_STRAND_COLOR: [number, number, number] = [130, 112, 105];
-const DELETION_COLOR: [number, number, number] = [105, 105, 105];
+const DELETION_COLOR: [number, number, number] = [165, 165, 165];
+const DELETION_HEIGHT = 2;
 
 export interface ReadsState {
   origin: { x: number; y: number };
@@ -69,13 +70,12 @@ export function paintReadsBases(
   ctx.textBaseline = 'middle';
 
   const boldFont = `600 ${BASE_SIZE}px Inconsolata, ui-monospace, Menlo, monospace`;
-  const regularFont = `${BASE_SIZE}px Inconsolata, ui-monospace, Menlo, monospace`;
   const delFill = `rgb(${DELETION_COLOR[0]},${DELETION_COLOR[1]},${DELETION_COLOR[2]})`;
   const radius = READ_BODY_HEIGHT / 2;
 
   for (let r = 0; r < reads.length; r++) {
     const read = reads[r];
-    const rowYTop = r * READ_ROW_H;
+    const rowYTop = read.row * READ_ROW_H;
     const rowYCenter = rowYTop + READ_ROW_H / 2;
     const bodyY = rowYCenter - READ_BODY_HEIGHT / 2;
     const bodyX = read.startCol * cellW;
@@ -90,16 +90,18 @@ export function paintReadsBases(
     ctx.roundRect(bodyX, bodyY, bodyW, READ_BODY_HEIGHT, radius);
     ctx.fill();
 
-    // Per-cell overlays: mismatches as bold colored letters, deletions as '-'.
+    // Per-cell overlays: mismatches as bold colored letters, deletions as
+    // a solid horizontal bar that visually replaces the body at that span.
     for (let i = 0; i < read.bases.length; i++) {
       const absCol = read.startCol + i;
-      const cellCenterX = absCol * cellW + cellW / 2;
+      const cellX = absCol * cellW;
+      const cellCenterX = cellX + cellW / 2;
       const base = read.bases[i];
 
       if (base === '-') {
-        ctx.font = regularFont;
+        const delY = rowYCenter - DELETION_HEIGHT / 2;
         ctx.fillStyle = delFill;
-        ctx.fillText('-', cellCenterX, rowYCenter);
+        ctx.fillRect(cellX, delY, cellW, DELETION_HEIGHT);
         continue;
       }
 

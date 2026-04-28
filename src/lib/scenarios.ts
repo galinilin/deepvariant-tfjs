@@ -2,27 +2,33 @@ import type { Base } from './palette';
 import { WINDOW_LENGTH, defaultWindowStart } from './reference';
 
 export type ScenarioType =
-  | 'hom_ref'
   | 'het'
   | 'hom_alt'
   | 'het_del'
   | 'hom_alt_del'
-  | 'error_burst';
+  | 'noisy_burst'
+  | 'strand_bias_het'
+  | 'tandem_snps'
+  | 'compound_alt';
 
 export interface Scenario {
   position: number;
   type: ScenarioType;
   altBase?: Base;
+  altBase2?: Base;
   delLength?: number;
 }
 
-const REQUIRED_TYPES: ScenarioType[] = ['hom_ref', 'het', 'hom_alt'];
+const REQUIRED_TYPES: ScenarioType[] = ['het', 'hom_alt'];
 const EXTRA_POOL: ScenarioType[] = [
-  'het_del',
-  'hom_alt_del',
-  'error_burst',
   'het',
   'hom_alt',
+  'het_del',
+  'hom_alt_del',
+  'noisy_burst',
+  'strand_bias_het',
+  'tandem_snps',
+  'compound_alt',
 ];
 
 const MIN_SPACING = 50;
@@ -70,15 +76,32 @@ function buildScenario(
 ): Scenario {
   const refBase = reference[position] ?? 'N';
   const altBase = pickAltBase(refBase, rng);
+
+  let altBase2: Base | undefined;
+  if (type === 'compound_alt') {
+    altBase2 = pickAltBase(refBase, rng, [altBase]);
+  } else if (type === 'tandem_snps') {
+    const ref2 = reference[position + 1] ?? 'N';
+    altBase2 = pickAltBase(ref2, rng);
+  }
+
   const delLength =
     type === 'het_del' || type === 'hom_alt_del'
       ? 1 + Math.floor(rng() * 3)
       : undefined;
-  return { position, type, altBase, delLength };
+
+  return { position, type, altBase, altBase2, delLength };
 }
 
-export function pickAltBase(refBase: Base, rng: () => number): Base {
-  const candidates = BASES.filter((b) => b !== refBase);
+export function pickAltBase(
+  refBase: Base,
+  rng: () => number,
+  exclude: Base[] = [],
+): Base {
+  const candidates = BASES.filter(
+    (b) => b !== refBase && !exclude.includes(b),
+  );
+  if (candidates.length === 0) return BASES[0];
   return candidates[Math.floor(rng() * candidates.length)];
 }
 

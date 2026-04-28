@@ -12,11 +12,13 @@ export interface Read {
   strand: Strand;
   mapq: number;
   insertSize: number;
+  row: number;
 }
 
 export const DEFAULT_READ_COUNT = 40;
 export const READ_MIN_LENGTH = 90;
 export const READ_MAX_LENGTH = 130;
+export const MAX_PACKED_ROWS = 14;
 
 export function makeRng(seed: number): () => number {
   let x = seed | 0;
@@ -72,7 +74,7 @@ export function buildReads(
     applyScenariosToRead(read, scenarios, reference, rng);
   }
 
-  reads.sort((a, b) => a.startCol - b.startCol);
+  packReads(reads);
   return reads;
 }
 
@@ -94,7 +96,33 @@ function makeRead(
     strand,
     mapq: 60,
     insertSize: 350,
+    row: 0,
   };
+}
+
+/**
+ * IGV-style packing: each read goes in the lowest row where its span doesn't
+ * overlap any read already placed in that row. Mutates each read.row.
+ */
+function packReads(reads: Read[]): void {
+  reads.sort((a, b) => a.startCol - b.startCol);
+  const rowEnds: number[] = [];
+  for (const read of reads) {
+    const readEnd = read.startCol + read.bases.length;
+    let placed = false;
+    for (let r = 0; r < rowEnds.length; r++) {
+      if (rowEnds[r] <= read.startCol) {
+        read.row = r;
+        rowEnds[r] = readEnd;
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) {
+      read.row = rowEnds.length;
+      rowEnds.push(readEnd);
+    }
+  }
 }
 
 function applyScenariosToRead(
@@ -108,9 +136,6 @@ function applyScenariosToRead(
     if (offset < 0 || offset >= read.bases.length) continue;
 
     switch (sc.type) {
-      case 'hom_ref':
-        // No mutation; reads remain reference at this locus.
-        break;
       case 'het':
         if (rng() < 0.5 && sc.altBase) {
           read.bases[offset] = sc.altBase;
@@ -131,18 +156,42 @@ function applyScenariosToRead(
           applyDeletion(read, offset, sc.delLength ?? 1);
         }
         break;
-      case 'error_burst':
-        if (rng() < 0.05) {
-          const refBase = reference[sc.position] ?? 'N';
-          const refSafe: Base =
-            refBase === 'A' || refBase === 'C' || refBase === 'G' || refBase === 'T'
-              ? refBase
-              : 'A';
+      case 'noisy_burst':
+        if (rng() < 0.25) {
+          const refSafe = safeBase(reference[sc.position]);
           read.bases[offset] = pickAltBase(refSafe, rng);
         }
         break;
+      case 'strand_bias_het':
+        if (read.strand === 'forward' && rng() < 0.7 && sc.altBase) {
+          read.bases[offset] = sc.altBase;
+        }
+        break;
+      case 'tandem_snps':
+        if (rng() < 0.5) {
+          if (sc.altBase) {
+            read.bases[offset] = sc.altBase;
+          }
+          if (sc.altBase2 && offset + 1 < read.bases.length) {
+            read.bases[offset + 1] = sc.altBase2;
+          }
+        }
+        break;
+      case 'compound_alt': {
+        const r = rng();
+        if (r < 0.4 && sc.altBase) {
+          read.bases[offset] = sc.altBase;
+        } else if (r < 0.8 && sc.altBase2) {
+          read.bases[offset] = sc.altBase2;
+        }
+        break;
+      }
     }
   }
+}
+
+function safeBase(b: Base | undefined): Base {
+  return b === 'A' || b === 'C' || b === 'G' || b === 'T' ? b : 'A';
 }
 
 function applyDeletion(read: Read, offset: number, length: number): void {

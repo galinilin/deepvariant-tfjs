@@ -27,7 +27,7 @@ import {
   clampWindowStart,
   defaultWindowStart,
 } from '../lib/reference';
-import { buildReads, makeRng, type Read } from '../lib/reads';
+import { buildReads, makeRng, MAX_PACKED_ROWS, type Read } from '../lib/reads';
 import { placeScenarios, type Scenario } from '../lib/scenarios';
 import type { Base } from '../lib/palette';
 
@@ -70,8 +70,7 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
 
     const refWidth = REF_COUNT * CELL_W;
     const fullPileupWidth = reference.length * CELL_W;
-    const READ_COUNT = reads.length;
-    const readsHeight = READ_COUNT * READ_ROW_H;
+    const readsHeight = MAX_PACKED_ROWS * READ_ROW_H;
     const scrubberWidth = refWidth * 0.8;
 
     const scrubberOrigin = { x: (refWidth - scrubberWidth) / 2, y: 0 };
@@ -273,7 +272,7 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
 
       drawReadsFrame(p, {
         origin: readsOrigin,
-        readsCount: READ_COUNT,
+        readsCount: MAX_PACKED_ROWS,
         width: refWidth,
       });
       if (readsCache) {
