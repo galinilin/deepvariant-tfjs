@@ -14,12 +14,12 @@ import type { Read } from './reads';
  *   vsc_min_count_indels=2, vsc_min_fraction_indels=0.06
  *   min_base_quality=10, min_mapping_quality=5
  */
-const MIN_MAPPING_QUALITY = 5;
-const MIN_BASE_QUALITY = 10;
-const MIN_COUNT_SNP = 2;
-const MIN_COUNT_INDEL = 2;
-const MIN_FRACTION_SNP = 0.12;
-const MIN_FRACTION_INDEL = 0.06;
+export const MIN_MAPPING_QUALITY = 5;
+export const MIN_BASE_QUALITY = 10;
+export const MIN_COUNT_SNP = 2;
+export const MIN_COUNT_INDEL = 2;
+export const MIN_FRACTION_SNP = 0.12;
+export const MIN_FRACTION_INDEL = 0.06;
 
 export interface CandidateInfo {
   base: Cell;
@@ -31,27 +31,35 @@ export interface CandidateInfo {
 export type Candidate = CandidateInfo | null;
 
 /**
- * Derive the candidate alt at a genomic position by majority vote across
- * reads that cover it, gated by DV's candidate-generation thresholds.
- *
- *  1. Reads with mapq < MIN_MAPPING_QUALITY don't count.
- *  2. For non-deletion bases, base quality < MIN_BASE_QUALITY don't count.
- *  3. An allele only becomes a candidate if its qualifying count meets
- *     both the minimum count (2) and the minimum fraction (12% for SNPs,
- *     6% for indels) of all qualifying reads at the position.
- *  4. If multiple alleles qualify, the highest-count one wins; ties break
- *     alphabetically (so '-' < 'A' < 'C' < 'G' < 'T').
- *
- * Returns null if no allele qualifies — meaning DV's `make_examples` would
- * not have generated a pileup image here, and no model evaluation happens.
+ * Discriminated outcome of running DV's candidate filter at a position.
+ * `accepted` returns the chosen candidate. The four `rejected-*` cases
+ * carry enough context for the UI to explain *why* DV would skip the
+ * locus.
  */
-export function deriveCandidate(
+export type CandidateOutcome =
+  | { kind: 'accepted'; info: CandidateInfo }
+  | { kind: 'no-coverage' }
+  | { kind: 'no-alt-evidence'; qualifyingReads: number }
+  | {
+      kind: 'below-count';
+      bestAlt: Cell;
+      count: number;
+      qualifyingReads: number;
+    }
+  | {
+      kind: 'below-fraction';
+      bestAlt: Cell;
+      count: number;
+      qualifyingReads: number;
+    };
+
+export function deriveCandidateOutcome(
   reads: Read[],
   reference: Base[],
   position: number,
-): Candidate {
+): CandidateOutcome {
   const refBase = reference[position];
-  if (!refBase || refBase === 'N') return null;
+  if (!refBase || refBase === 'N') return { kind: 'no-coverage' };
 
   const counts = new Map<Cell, number>();
   let qualifyingTotal = 0;
@@ -73,33 +81,66 @@ export function deriveCandidate(
     }
   }
 
-  if (qualifyingTotal === 0 || counts.size === 0) return null;
-
-  let best: Cell | null = null;
-  let bestCount = 0;
-  for (const [base, count] of counts) {
-    const isIndel = base === '-';
-    const minCount = isIndel ? MIN_COUNT_INDEL : MIN_COUNT_SNP;
-    const minFraction = isIndel ? MIN_FRACTION_INDEL : MIN_FRACTION_SNP;
-    if (count < minCount) continue;
-    if (count / qualifyingTotal < minFraction) continue;
-
-    if (
-      count > bestCount ||
-      (count === bestCount && (best === null || base < best))
-    ) {
-      bestCount = count;
-      best = base;
-    }
+  if (qualifyingTotal === 0) return { kind: 'no-coverage' };
+  if (counts.size === 0) {
+    return { kind: 'no-alt-evidence', qualifyingReads: qualifyingTotal };
   }
 
-  if (best === null) return null;
+  // Find the most-common alt (alphabetical tie-break) regardless of pass/fail.
+  let bestAlt: Cell | null = null;
+  let bestCount = 0;
+  for (const [base, count] of counts) {
+    if (
+      count > bestCount ||
+      (count === bestCount && (bestAlt === null || base < bestAlt))
+    ) {
+      bestCount = count;
+      bestAlt = base;
+    }
+  }
+  if (bestAlt === null) {
+    return { kind: 'no-alt-evidence', qualifyingReads: qualifyingTotal };
+  }
+
+  const isIndel = bestAlt === '-';
+  const minCount = isIndel ? MIN_COUNT_INDEL : MIN_COUNT_SNP;
+  const minFraction = isIndel ? MIN_FRACTION_INDEL : MIN_FRACTION_SNP;
+
+  if (bestCount < minCount) {
+    return {
+      kind: 'below-count',
+      bestAlt,
+      count: bestCount,
+      qualifyingReads: qualifyingTotal,
+    };
+  }
+  if (bestCount / qualifyingTotal < minFraction) {
+    return {
+      kind: 'below-fraction',
+      bestAlt,
+      count: bestCount,
+      qualifyingReads: qualifyingTotal,
+    };
+  }
+
   return {
-    base: best,
-    refBase,
-    supportingReads: bestCount,
-    qualifyingReads: qualifyingTotal,
+    kind: 'accepted',
+    info: {
+      base: bestAlt,
+      refBase,
+      supportingReads: bestCount,
+      qualifyingReads: qualifyingTotal,
+    },
   };
+}
+
+export function deriveCandidate(
+  reads: Read[],
+  reference: Base[],
+  position: number,
+): Candidate {
+  const outcome = deriveCandidateOutcome(reads, reference, position);
+  return outcome.kind === 'accepted' ? outcome.info : null;
 }
 
 export function readSupportsCandidate(
@@ -111,4 +152,8 @@ export function readSupportsCandidate(
   const offset = position - read.startCol;
   if (offset < 0 || offset >= read.bases.length) return false;
   return read.bases[offset] === candidate.base;
+}
+
+export function formatAlt(c: Cell): string {
+  return c === '-' ? 'del' : c;
 }

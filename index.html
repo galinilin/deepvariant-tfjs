@@ -63,23 +63,38 @@
         position: fixed;
         background: #0a0a0a;
         border: 1px solid #2a2a2a;
-        color: #ddd;
-        padding: 6px 9px;
+        color: #ededed;
+        padding: 10px 13px;
         font-family: 'Inconsolata', ui-monospace, Menlo, monospace;
-        font-size: 11px;
+        font-size: 14px;
         line-height: 1.55;
         pointer-events: none;
         z-index: 100;
         display: none;
         white-space: nowrap;
-        max-width: 360px;
+        max-width: 440px;
+      }
+      .tooltip .section {
+        padding: 4px 0;
+      }
+      .tooltip .section + .section {
+        border-top: 1px solid #232323;
+        margin-top: 4px;
+        padding-top: 6px;
+      }
+      .tooltip .section-label {
+        color: #909090;
+        font-size: 11px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        margin-bottom: 4px;
       }
       .tooltip .row-id {
         color: #fff;
         letter-spacing: 0.04em;
       }
       .tooltip .muted {
-        color: #888;
+        color: #aaa;
       }
       .tooltip .supports-yes {
         color: #ffdc6e;

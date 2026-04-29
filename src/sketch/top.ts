@@ -29,7 +29,13 @@ import {
 } from '../lib/reference';
 import { buildReads, makeRng, MAX_PACKED_ROWS, type Read } from '../lib/reads';
 import { placeScenarios, type Scenario } from '../lib/scenarios';
-import { deriveCandidate, readSupportsCandidate, type Candidate } from '../lib/candidate';
+import {
+  deriveCandidateOutcome,
+  formatAlt,
+  readSupportsCandidate,
+  type Candidate,
+  type CandidateOutcome,
+} from '../lib/candidate';
 import { sandboxState } from '../lib/sandbox-state';
 import { hitTestReads } from '../world/hit-test';
 import type { Base, Cell } from '../lib/palette';
@@ -48,6 +54,7 @@ export interface HoverInfo {
   isPredictColumn: boolean;
   supportsCandidate: boolean | null;
   candidate: Candidate;
+  outcome: CandidateOutcome;
 }
 
 export interface SketchHandle {
@@ -269,35 +276,52 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
       }
     };
 
-    const drawPredictLabel = (predictX: number, candidate: Candidate) => {
+    const drawPredictLabel = (predictX: number, outcome: CandidateOutcome) => {
       const margin = 6 / cam.zoom;
       const triH = 7 / cam.zoom;
       const labelY = refOrigin.y - margin - triH - 6 / cam.zoom;
 
       let text: string;
-      let alphaR = 255;
-      let alphaG = 220;
-      let alphaB = 110;
-      let alpha: number;
-      if (candidate === null) {
-        text = 'no candidate';
-        alphaR = 140;
-        alphaG = 140;
-        alphaB = 140;
-        alpha = 200;
-      } else if (candidate.base === '-') {
-        text = `${candidate.refBase}\u2192del`;
-        alpha = 230;
-      } else {
-        text = `${candidate.refBase}\u2192${candidate.base}`;
-        alpha = 230;
+      let r = 255;
+      let g = 220;
+      let b = 110;
+      let alpha = 230;
+
+      switch (outcome.kind) {
+        case 'accepted': {
+          const altLabel = formatAlt(outcome.info.base);
+          text = `${outcome.info.refBase}\u2192${altLabel}  ${outcome.info.supportingReads}/${outcome.info.qualifyingReads}`;
+          break;
+        }
+        case 'no-coverage':
+          text = 'no reads';
+          r = 140; g = 140; b = 140; alpha = 200;
+          break;
+        case 'no-alt-evidence':
+          text = `all ref (${outcome.qualifyingReads})`;
+          r = 140; g = 140; b = 140; alpha = 200;
+          break;
+        case 'below-count': {
+          const altLabel = formatAlt(outcome.bestAlt);
+          text = `${altLabel} ${outcome.count}\u00d7 (need 2)`;
+          r = 200; g = 180; b = 110; alpha = 200;
+          break;
+        }
+        case 'below-fraction': {
+          const altLabel = formatAlt(outcome.bestAlt);
+          const pct = ((outcome.count / outcome.qualifyingReads) * 100).toFixed(1);
+          const minPct = outcome.bestAlt === '-' ? 6 : 12;
+          text = `${altLabel} ${pct}% (need ${minPct}%)`;
+          r = 200; g = 180; b = 110; alpha = 200;
+          break;
+        }
       }
 
       p.noStroke();
-      p.fill(alphaR, alphaG, alphaB, alpha);
+      p.fill(r, g, b, alpha);
       p.textFont('Inconsolata');
       p.textStyle(p.BOLD);
-      p.textSize(11 / cam.zoom);
+      p.textSize(14 / cam.zoom);
       p.textAlign(p.CENTER, p.BOTTOM);
       p.text(text, predictX, labelY);
     };
@@ -326,7 +350,9 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
 
     p.draw = () => {
       const predictPos = windowStart + Math.floor(WINDOW_LENGTH / 2);
-      const candidate = deriveCandidate(reads, reference, predictPos);
+      const outcome = deriveCandidateOutcome(reads, reference, predictPos);
+      const candidate: Candidate =
+        outcome.kind === 'accepted' ? outcome.info : null;
       sandboxState.candidate = candidate;
       const predictX =
         refOrigin.x + Math.floor(WINDOW_LENGTH / 2) * CELL_W + CELL_W / 2;
@@ -381,7 +407,7 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
 
       drawSupportsMarkers(candidate, predictPos);
       drawPredictMarker();
-      drawPredictLabel(predictX, candidate);
+      drawPredictLabel(predictX, outcome);
 
       p.pop();
     };
@@ -429,11 +455,14 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
     );
     if (!hit) return null;
     const predictPos = windowStartRef.value + Math.floor(WINDOW_LENGTH / 2);
-    const candidate = deriveCandidate(readsRef, referenceRef, predictPos);
+    const outcome = deriveCandidateOutcome(readsRef, referenceRef, predictPos);
+    const candidate: Candidate =
+      outcome.kind === 'accepted' ? outcome.info : null;
     const isPredictColumn = hit.absCol === predictPos;
-    const supportsCandidate = isPredictColumn && candidate
-      ? readSupportsCandidate(hit.read, predictPos, candidate)
-      : null;
+    const supportsCandidate =
+      isPredictColumn && candidate
+        ? readSupportsCandidate(hit.read, predictPos, candidate)
+        : null;
     return {
       readId: hit.read.id,
       startCol: hit.read.startCol,
@@ -447,6 +476,7 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
       isPredictColumn,
       supportsCandidate,
       candidate,
+      outcome,
     };
   };
 

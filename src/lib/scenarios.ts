@@ -1,5 +1,5 @@
 import type { Base } from './palette';
-import { WINDOW_LENGTH, defaultWindowStart } from './reference';
+import { WINDOW_LENGTH } from './reference';
 
 export type ScenarioType =
   | 'het'
@@ -46,7 +46,10 @@ export interface PlaceScenariosOptions {
 
 export function placeScenarios(reference: Base[], rng: () => number): Scenario[] {
   const refLength = reference.length;
-  const reachableStart = defaultWindowStart(refLength);
+  // Minimum predict-column position the user can reach: when windowStart=0,
+  // the predict column lands at floor(WINDOW_LENGTH/2). Scenarios placed
+  // below this are unreachable as predict targets.
+  const reachableStart = Math.floor(WINDOW_LENGTH / 2);
   const reachableEnd = refLength - WINDOW_LENGTH + Math.floor(WINDOW_LENGTH / 2);
   const total = 8 + Math.floor(rng() * 3); // 8, 9, or 10
 
