@@ -18,12 +18,16 @@ export const sandboxState: {
   candidate: Candidate;
   pileupTensor: Float32Array | null;
   pileupPosition: number;
+  /** Bumped on Randomize so the bottom sketch invalidates predictions even
+   * when predictPos lands on the same column. */
+  readsGeneration: number;
   prediction: PredictionState | null;
   predicting: boolean;
 } = {
   candidate: null,
   pileupTensor: null,
   pileupPosition: -1,
+  readsGeneration: 0,
   prediction: null,
   predicting: false,
 };

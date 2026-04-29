@@ -33,6 +33,7 @@ let modelPromise: Promise<DeepVariantModel> | null = null;
 let modelInstance: DeepVariantModel | null = null;
 let modelError: string | null = null;
 let lastPredictedPosition = -1;
+let lastPredictedGen = -1;
 let predictDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 function ensureModel(): Promise<DeepVariantModel> {
@@ -52,17 +53,37 @@ function ensureModel(): Promise<DeepVariantModel> {
   return modelPromise;
 }
 
-async function runPrediction(tensor: Float32Array, position: number): Promise<void> {
+async function runPrediction(
+  tensor: Float32Array,
+  position: number,
+  generation: number,
+): Promise<void> {
   if (sandboxState.predicting) return;
-  if (sandboxState.pileupPosition !== position) return; // stale
+  if (
+    sandboxState.pileupPosition !== position ||
+    sandboxState.readsGeneration !== generation
+  ) {
+    return;
+  }
   sandboxState.predicting = true;
   try {
     const m = await ensureModel();
-    if (sandboxState.pileupPosition !== position) return; // stale after load
+    if (
+      sandboxState.pileupPosition !== position ||
+      sandboxState.readsGeneration !== generation
+    ) {
+      return;
+    }
     const result = await m.predict(tensor);
-    if (sandboxState.pileupPosition !== position) return; // stale after predict
+    if (
+      sandboxState.pileupPosition !== position ||
+      sandboxState.readsGeneration !== generation
+    ) {
+      return;
+    }
     sandboxState.prediction = { ...result, position };
     lastPredictedPosition = position;
+    lastPredictedGen = generation;
   } catch (err) {
     console.error('prediction failed:', err);
   } finally {
@@ -72,13 +93,19 @@ async function runPrediction(tensor: Float32Array, position: number): Promise<vo
 
 function maybeTriggerPrediction(): void {
   if (!sandboxState.pileupTensor) return;
-  if (sandboxState.pileupPosition === lastPredictedPosition) return;
+  if (
+    sandboxState.pileupPosition === lastPredictedPosition &&
+    sandboxState.readsGeneration === lastPredictedGen
+  ) {
+    return;
+  }
   if (sandboxState.predicting) return;
   if (predictDebounceTimer) clearTimeout(predictDebounceTimer);
   const tensor = sandboxState.pileupTensor;
   const position = sandboxState.pileupPosition;
+  const generation = sandboxState.readsGeneration;
   predictDebounceTimer = setTimeout(() => {
-    void runPrediction(tensor, position);
+    void runPrediction(tensor, position, generation);
   }, 180);
 }
 
@@ -230,15 +257,27 @@ function drawPileupImagePanel(
 
   const innerPad = 14;
   const labelStripH = PILEUP_LABEL_FONT_SIZE + 6;
+  const footerH = 16;
   const imgX = x + innerPad;
   const imgY = y + innerPad + labelStripH;
   const imgW = w - innerPad * 2;
-  const imgH = Math.min(h - innerPad * 2 - labelStripH, imgW * channelImage.height / channelImage.width);
+  // Stretch height to fill the panel — the source aspect (1571×30) is too
+  // wide to preserve. The model sees this dense pixel grid; we expose its
+  // structure (channel separation, predict column) over per-cell fidelity.
+  const imgH = h - innerPad * 2 - labelStripH - footerH;
+
+  // Crisp pixel scaling: the source channel image is small enough that
+  // smoothing makes adjacent rows blur together.
+  const ctx = p.drawingContext as CanvasRenderingContext2D;
+  const prevSmooth = ctx.imageSmoothingEnabled;
+  ctx.imageSmoothingEnabled = false;
   p.image(channelImage, imgX, imgY, imgW, imgH);
+  ctx.imageSmoothingEnabled = prevSmooth;
 
   // Channel labels above each strip
-  const channelW = (imgW - PILEUP_INNER_GAP * (PILEUP_CHANNELS - 1) * (imgW / channelImage.width)) / PILEUP_CHANNELS;
-  const gapPx = PILEUP_INNER_GAP * (imgW / channelImage.width);
+  const colPxRatio = imgW / channelImage.width;
+  const gapPx = PILEUP_INNER_GAP * colPxRatio;
+  const channelW = PILEUP_WIDTH * colPxRatio;
   p.noStroke();
   p.fill(150, 150, 160);
   p.textSize(PILEUP_LABEL_FONT_SIZE);
@@ -251,20 +290,19 @@ function drawPileupImagePanel(
   // Predict-column highlight on every channel strip
   p.stroke(ROW_HIGHLIGHT_COLOR[0], ROW_HIGHLIGHT_COLOR[1], ROW_HIGHLIGHT_COLOR[2], 200);
   p.strokeWeight(1);
-  const colPxRatio = imgW / channelImage.width;
   for (let ch = 0; ch < PILEUP_CHANNELS; ch++) {
     const colCenterCacheX = ch * (PILEUP_WIDTH + PILEUP_INNER_GAP) + PREDICT_COL + 0.5;
     const lineX = imgX + colCenterCacheX * colPxRatio;
     p.line(lineX, imgY - 2, lineX, imgY + imgH + 2);
   }
 
-  // Footer note: ref-rows count + visible-rows note
+  // Footer note
   p.noStroke();
   p.fill(120, 120, 130);
   p.textSize(10);
   p.textAlign(p.LEFT, p.TOP);
   p.text(
-    `${REF_ROWS} ref rows + read rows · showing top ${VISIBLE_ROWS}/${PILEUP_HEIGHT}`,
+    `${REF_ROWS} ref rows + reads · top ${VISIBLE_ROWS}/${PILEUP_HEIGHT}`,
     imgX,
     imgY + imgH + 4,
   );

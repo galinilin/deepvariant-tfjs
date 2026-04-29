@@ -128,6 +128,7 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
     let dragMode: 'pan' | 'scrubber' = 'pan';
     let refCache: TieredCache | null = null;
     let readsCache: p5.Graphics | null = null;
+    let lastEncodedGen = -1;
 
     const scrubberState = () => ({
       reference,
@@ -195,6 +196,7 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
     const randomize = () => {
       const seed = Math.floor(Math.random() * 0x7fffffff) || 1;
       generateWorld(seed);
+      sandboxState.readsGeneration++;
 
       if (scenarios.length > 0) {
         const pick = scenarios[Math.floor(Math.random() * scenarios.length)];
@@ -359,10 +361,11 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
       const candidate: Candidate =
         outcome.kind === 'accepted' ? outcome.info : null;
       sandboxState.candidate = candidate;
-      // Re-encode the pileup tensor whenever the candidate or window moves.
-      // Cheap (~150k float writes) — fine to recompute every frame.
       if (candidate) {
-        if (sandboxState.pileupPosition !== predictPos) {
+        const needsEncode =
+          sandboxState.pileupPosition !== predictPos ||
+          lastEncodedGen !== sandboxState.readsGeneration;
+        if (needsEncode) {
           sandboxState.pileupTensor = encodePileup(
             reads,
             reference,
@@ -370,7 +373,8 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
             candidate,
           );
           sandboxState.pileupPosition = predictPos;
-          sandboxState.prediction = null; // stale prediction
+          lastEncodedGen = sandboxState.readsGeneration;
+          sandboxState.prediction = null;
         }
       } else {
         sandboxState.pileupTensor = null;
