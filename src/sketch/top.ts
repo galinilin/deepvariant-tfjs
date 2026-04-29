@@ -421,9 +421,11 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
       wp.y,
       readsRef,
       readsOriginRef,
+      WINDOW_LENGTH,
       CELL_W,
       READ_ROW_H,
       MAX_PACKED_ROWS,
+      windowStartRef.value,
     );
     if (!hit) return null;
     const predictPos = windowStartRef.value + Math.floor(WINDOW_LENGTH / 2);
