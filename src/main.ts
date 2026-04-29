@@ -1,6 +1,7 @@
 import { mountTopSketch, type HoverInfo } from './sketch/top';
 import { mountBottomSketch } from './sketch/bottom';
 import { formatAlt, type CandidateOutcome } from './lib/candidate';
+import { verifyGoldenParity, inspectGoldenChannels } from './lib/parity';
 
 const topEl = document.getElementById('sketch-top');
 const bottomEl = document.getElementById('sketch-bottom');
@@ -14,6 +15,59 @@ resetBtn?.addEventListener('click', () => top.resetView());
 
 const randomizeBtn = document.getElementById('randomize');
 randomizeBtn?.addEventListener('click', () => top.randomize());
+
+const verifyBtn = document.getElementById('verify-golden') as HTMLButtonElement | null;
+verifyBtn?.addEventListener('click', async () => {
+  const original = verifyBtn.textContent ?? 'Verify golden';
+  verifyBtn.disabled = true;
+  try {
+    const result = await verifyGoldenParity({
+      onProgress: (s) => {
+        verifyBtn.textContent = s;
+      },
+    });
+    const headline = result.passed
+      ? '✓ exact'
+      : result.argmaxMatches
+        ? `~ argmax ✓ (uint8 quant Δ${result.maxDelta.toExponential(1)})`
+        : `✗ argmax mismatch (Δ${result.maxDelta.toExponential(1)})`;
+    console.group(`Golden parity ${headline}`);
+    for (const line of result.details) console.log(line);
+    console.groupEnd();
+    verifyBtn.textContent = result.passed
+      ? 'Golden ✓'
+      : result.argmaxMatches
+        ? 'Golden ✓ (quant)'
+        : `Golden ✗ Δ${result.maxDelta.toExponential(1)}`;
+  } catch (err) {
+    console.error('verify-golden failed:', err);
+    verifyBtn.textContent = 'Verify failed (see console)';
+  } finally {
+    setTimeout(() => {
+      verifyBtn.textContent = original;
+      verifyBtn.disabled = false;
+    }, 6000);
+  }
+});
+
+const inspectBtn = document.getElementById('inspect-golden') as HTMLButtonElement | null;
+inspectBtn?.addEventListener('click', async () => {
+  const original = inspectBtn.textContent ?? 'Inspect golden';
+  inspectBtn.disabled = true;
+  inspectBtn.textContent = 'Loading…';
+  try {
+    await inspectGoldenChannels();
+    inspectBtn.textContent = 'Logged to console';
+  } catch (err) {
+    console.error('inspect-golden failed:', err);
+    inspectBtn.textContent = 'Failed (see console)';
+  } finally {
+    setTimeout(() => {
+      inspectBtn.textContent = original;
+      inspectBtn.disabled = false;
+    }, 4000);
+  }
+});
 
 const tooltip = document.getElementById('read-tooltip');
 let isDragging = false;

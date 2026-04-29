@@ -37,6 +37,7 @@ import {
   type CandidateOutcome,
 } from '../lib/candidate';
 import { sandboxState } from '../lib/sandbox-state';
+import { encodePileup } from '../lib/pileup-encoder';
 import { hitTestReads } from '../world/hit-test';
 import type { Base, Cell } from '../lib/palette';
 import type { Strand } from '../lib/reads';
@@ -358,6 +359,24 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
       const candidate: Candidate =
         outcome.kind === 'accepted' ? outcome.info : null;
       sandboxState.candidate = candidate;
+      // Re-encode the pileup tensor whenever the candidate or window moves.
+      // Cheap (~150k float writes) — fine to recompute every frame.
+      if (candidate) {
+        if (sandboxState.pileupPosition !== predictPos) {
+          sandboxState.pileupTensor = encodePileup(
+            reads,
+            reference,
+            predictPos,
+            candidate,
+          );
+          sandboxState.pileupPosition = predictPos;
+          sandboxState.prediction = null; // stale prediction
+        }
+      } else {
+        sandboxState.pileupTensor = null;
+        sandboxState.pileupPosition = -1;
+        sandboxState.prediction = null;
+      }
       const predictX =
         refOrigin.x + Math.floor(WINDOW_LENGTH / 2) * CELL_W + CELL_W / 2;
 
