@@ -41,7 +41,7 @@ import { hitTestReads } from '../world/hit-test';
 import type { Base, Cell } from '../lib/palette';
 import type { Strand } from '../lib/reads';
 
-export interface HoverInfo {
+interface HoverInfoBase {
   readId: string;
   startCol: number;
   endCol: number;
@@ -49,13 +49,19 @@ export interface HoverInfo {
   mapq: number;
   insertSize: number;
   absCol: number;
-  base: Cell;
-  quality: number;
   isPredictColumn: boolean;
   supportsCandidate: boolean | null;
   candidate: Candidate;
   outcome: CandidateOutcome;
 }
+
+export type HoverInfo =
+  | (HoverInfoBase & { kind: 'cell'; base: Cell; quality: number })
+  | (HoverInfoBase & {
+      kind: 'insertion';
+      sequence: Base[];
+      qualities: Uint8Array;
+    });
 
 export interface SketchHandle {
   resetView: () => void;
@@ -267,9 +273,7 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
       p.fill(255, 220, 110, 235);
       for (const read of reads) {
         if (read.row >= MAX_PACKED_ROWS) continue;
-        const offset = predictPos - read.startCol;
-        if (offset < 0 || offset >= read.bases.length) continue;
-        if (read.bases[offset] !== candidate.base) continue;
+        if (!readSupportsCandidate(read, predictPos, candidate)) continue;
         const dotY =
           readsOrigin.y + read.row * READ_ROW_H + READ_ROW_H - 3 / cam.zoom;
         p.circle(dotX, dotY, dotDiameter);
@@ -289,7 +293,7 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
 
       switch (outcome.kind) {
         case 'accepted': {
-          const altLabel = formatAlt(outcome.info.base);
+          const altLabel = formatAlt(outcome.info);
           text = `${outcome.info.refBase}\u2192${altLabel}  ${outcome.info.supportingReads}/${outcome.info.qualifyingReads}`;
           break;
         }
@@ -302,15 +306,15 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
           r = 140; g = 140; b = 140; alpha = 200;
           break;
         case 'below-count': {
-          const altLabel = formatAlt(outcome.bestAlt);
+          const altLabel = formatAlt(outcome.alt);
           text = `${altLabel} ${outcome.count}\u00d7 (need 2)`;
           r = 200; g = 180; b = 110; alpha = 200;
           break;
         }
         case 'below-fraction': {
-          const altLabel = formatAlt(outcome.bestAlt);
+          const altLabel = formatAlt(outcome.alt);
           const pct = ((outcome.count / outcome.qualifyingReads) * 100).toFixed(1);
-          const minPct = outcome.bestAlt === '-' ? 6 : 12;
+          const minPct = outcome.alt.kind === 'snv' ? 12 : 6;
           text = `${altLabel} ${pct}% (need ${minPct}%)`;
           r = 200; g = 180; b = 110; alpha = 200;
           break;
@@ -458,12 +462,14 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
     const outcome = deriveCandidateOutcome(readsRef, referenceRef, predictPos);
     const candidate: Candidate =
       outcome.kind === 'accepted' ? outcome.info : null;
+    // For an insertion hit, "predict column" means the candidate is an
+    // insertion anchored at the same offset (right after this base).
     const isPredictColumn = hit.absCol === predictPos;
     const supportsCandidate =
       isPredictColumn && candidate
         ? readSupportsCandidate(hit.read, predictPos, candidate)
         : null;
-    return {
+    const base: HoverInfoBase = {
       readId: hit.read.id,
       startCol: hit.read.startCol,
       endCol: hit.read.startCol + hit.read.bases.length - 1,
@@ -471,12 +477,24 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
       mapq: hit.read.mapq,
       insertSize: hit.read.insertSize,
       absCol: hit.absCol,
-      base: hit.base,
-      quality: hit.quality,
       isPredictColumn,
       supportsCandidate,
       candidate,
       outcome,
+    };
+    if (hit.kind === 'insertion') {
+      return {
+        ...base,
+        kind: 'insertion',
+        sequence: hit.sequence,
+        qualities: hit.qualities,
+      };
+    }
+    return {
+      ...base,
+      kind: 'cell',
+      base: hit.base,
+      quality: hit.quality,
     };
   };
 

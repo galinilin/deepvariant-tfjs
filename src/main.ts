@@ -1,6 +1,6 @@
 import { mountTopSketch, type HoverInfo } from './sketch/top';
 import { mountBottomSketch } from './sketch/bottom';
-import type { CandidateOutcome } from './lib/candidate';
+import { formatAlt, type CandidateOutcome } from './lib/candidate';
 
 const topEl = document.getElementById('sketch-top');
 const bottomEl = document.getElementById('sketch-bottom');
@@ -57,9 +57,8 @@ if (tooltip) {
 }
 
 function formatTooltip(info: HoverInfo): string {
-  const baseLabel = info.base === '-' ? 'del' : info.base;
   const supportsLine = formatSupportsLine(info);
-  return [
+  const readSection = [
     `<div class="section">`,
     `<div class="section-label">Read</div>`,
     `<div class="row-id">${esc(info.readId)} <span class="muted">·</span> ` +
@@ -67,6 +66,24 @@ function formatTooltip(info: HoverInfo): string {
       `${info.strand}</div>`,
     `<div class="muted">mapq=${info.mapq}</div>`,
     `</div>`,
+  ].join('');
+
+  if (info.kind === 'insertion') {
+    const seqLabel = '+' + info.sequence.join('');
+    const qLabel = Array.from(info.qualities).map((q) => `Q${q}`).join(' ');
+    return [
+      readSection,
+      `<div class="section">`,
+      `<div class="section-label">Insertion after locus ${info.absCol + 1}</div>`,
+      `<div><b class="ins-seq">${esc(seqLabel)}</b> <span class="muted">· ${esc(qLabel)}</span></div>`,
+      supportsLine,
+      `</div>`,
+    ].join('');
+  }
+
+  const baseLabel = info.base === '-' ? 'del' : info.base;
+  return [
+    readSection,
     `<div class="section">`,
     `<div class="section-label">Locus ${info.absCol + 1}</div>`,
     `<div>base=<b>${baseLabel}</b>${info.base !== '-' ? ` <span class="muted">·</span> Q=${info.quality}` : ''}</div>`,
@@ -97,10 +114,10 @@ function formatRejection(outcome: CandidateOutcome): string {
     case 'no-alt-evidence':
       return `no candidate · 0 alt of ${outcome.qualifyingReads}`;
     case 'below-count':
-      return `no candidate · ${outcome.count}× ${esc(outcome.bestAlt === '-' ? 'del' : outcome.bestAlt)} < 2 required`;
+      return `no candidate · ${outcome.count}× ${esc(formatAlt(outcome.alt))} < 2 required`;
     case 'below-fraction': {
       const pct = ((outcome.count / outcome.qualifyingReads) * 100).toFixed(1);
-      const minPct = outcome.bestAlt === '-' ? 6 : 12;
+      const minPct = outcome.alt.kind === 'snv' ? 12 : 6;
       return `no candidate · ${pct}% < ${minPct}% required`;
     }
   }

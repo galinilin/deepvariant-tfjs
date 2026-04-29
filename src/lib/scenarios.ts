@@ -6,6 +6,8 @@ export type ScenarioType =
   | 'hom_alt'
   | 'het_del'
   | 'hom_alt_del'
+  | 'het_ins'
+  | 'hom_alt_ins'
   | 'noisy_burst'
   | 'strand_bias_het'
   | 'tandem_snps'
@@ -19,6 +21,7 @@ export interface Scenario {
   altBase?: Base;
   altBase2?: Base;
   delLength?: number;
+  insLength?: number;
 }
 
 const REQUIRED_TYPES: ScenarioType[] = ['het', 'hom_alt'];
@@ -27,6 +30,8 @@ const EXTRA_POOL: ScenarioType[] = [
   'hom_alt',
   'het_del',
   'hom_alt_del',
+  'het_ins',
+  'hom_alt_ins',
   'noisy_burst',
   'strand_bias_het',
   'tandem_snps',
@@ -97,7 +102,12 @@ function buildScenario(
       ? 1 + Math.floor(rng() * 3)
       : undefined;
 
-  return { position, type, altBase, altBase2, delLength };
+  const insLength =
+    type === 'het_ins' || type === 'hom_alt_ins'
+      ? 1 + Math.floor(rng() * 3)
+      : undefined;
+
+  return { position, type, altBase, altBase2, delLength, insLength };
 }
 
 export function pickAltBase(
