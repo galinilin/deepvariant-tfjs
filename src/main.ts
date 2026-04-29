@@ -69,7 +69,7 @@ function formatTooltip(info: HoverInfo): string {
     `</div>`,
     `<div class="section">`,
     `<div class="section-label">Locus ${info.absCol + 1}</div>`,
-    `<div>base=<b>${baseLabel}</b> <span class="muted">·</span> Q=${info.quality}</div>`,
+    `<div>base=<b>${baseLabel}</b>${info.base !== '-' ? ` <span class="muted">·</span> Q=${info.quality}` : ''}</div>`,
     supportsLine,
     `</div>`,
   ].join('');

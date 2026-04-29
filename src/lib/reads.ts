@@ -246,6 +246,7 @@ function applyDeletion(read: Read, offset: number, length: number): void {
   for (let i = 0; i < length; i++) {
     if (offset + i < read.bases.length) {
       read.bases[offset + i] = '-';
+      read.qualities[offset + i] = 0; // no base in BAM QUAL at deleted positions
     }
   }
 }
