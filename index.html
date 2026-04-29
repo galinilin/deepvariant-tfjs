@@ -59,6 +59,34 @@
         color: #fff;
         border-color: #3a3a3a;
       }
+      .tooltip {
+        position: fixed;
+        background: #0a0a0a;
+        border: 1px solid #2a2a2a;
+        color: #ddd;
+        padding: 6px 9px;
+        font-family: 'Inconsolata', ui-monospace, Menlo, monospace;
+        font-size: 11px;
+        line-height: 1.55;
+        pointer-events: none;
+        z-index: 100;
+        display: none;
+        white-space: nowrap;
+        max-width: 360px;
+      }
+      .tooltip .row-id {
+        color: #fff;
+        letter-spacing: 0.04em;
+      }
+      .tooltip .muted {
+        color: #888;
+      }
+      .tooltip .supports-yes {
+        color: #ffdc6e;
+      }
+      .tooltip .supports-no {
+        color: #c0c0c0;
+      }
     </style>
   </head>
   <body>
@@ -68,6 +96,7 @@
       <button id="randomize" class="reset-btn" type="button">Randomize</button>
       <button id="reset-view" class="reset-btn" type="button">Reset view</button>
     </div>
+    <div id="read-tooltip" class="tooltip"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

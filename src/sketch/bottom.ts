@@ -1,4 +1,5 @@
 import p5 from 'p5';
+import { sandboxState } from '../lib/sandbox-state';
 
 export interface BottomHandle {
   destroy: () => void;
@@ -7,6 +8,7 @@ export interface BottomHandle {
 const LABEL_COLOR: [number, number, number] = [210, 210, 210];
 const BORDER_COLOR: [number, number, number] = [48, 48, 48];
 const PLACEHOLDER_COLOR: [number, number, number] = [90, 90, 90];
+const NO_CANDIDATE_COLOR: [number, number, number] = [120, 120, 120];
 
 const MARGIN = 40;
 const GAP = 40;
@@ -71,9 +73,13 @@ function drawPanel(
   p.strokeWeight(0.5);
   p.rect(x, y, w, h);
 
+  const noCandidate = sandboxState.candidate === null;
+  const fill = noCandidate ? NO_CANDIDATE_COLOR : PLACEHOLDER_COLOR;
+  const text = noCandidate ? 'No candidate' : 'placeholder';
+
   p.noStroke();
-  p.fill(PLACEHOLDER_COLOR[0], PLACEHOLDER_COLOR[1], PLACEHOLDER_COLOR[2]);
-  p.textSize(11);
+  p.fill(fill[0], fill[1], fill[2]);
+  p.textSize(noCandidate ? 13 : 11);
   p.textAlign(p.CENTER, p.CENTER);
-  p.text('placeholder', x + w / 2, y + h / 2);
+  p.text(text, x + w / 2, y + h / 2);
 }

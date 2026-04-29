@@ -9,7 +9,9 @@ export type ScenarioType =
   | 'noisy_burst'
   | 'strand_bias_het'
   | 'tandem_snps'
-  | 'compound_alt';
+  | 'compound_alt'
+  | 'low_quality_alt'
+  | 'low_mapq_alt';
 
 export interface Scenario {
   position: number;
@@ -29,6 +31,8 @@ const EXTRA_POOL: ScenarioType[] = [
   'strand_bias_het',
   'tandem_snps',
   'compound_alt',
+  'low_quality_alt',
+  'low_mapq_alt',
 ];
 
 const MIN_SPACING = 50;

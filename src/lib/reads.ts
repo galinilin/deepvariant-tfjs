@@ -86,7 +86,7 @@ function makeRead(
   rng: () => number,
 ): Read {
   const bases: Cell[] = reference.slice(startCol, startCol + length);
-  const qualities = new Uint8Array(length).fill(35);
+  const qualities = qualityProfile(length, 36, rng);
   const strand: Strand = rng() < 0.5 ? 'forward' : 'reverse';
   return {
     id,
@@ -94,10 +94,44 @@ function makeRead(
     bases,
     qualities,
     strand,
-    mapq: 60,
-    insertSize: 350,
+    mapq: generateMapq(rng),
+    insertSize: 320 + Math.floor(rng() * 120),
     row: 0,
   };
+}
+
+/**
+ * Per-base Phred quality profile. Mostly hovers around `baseQ` with mild
+ * jitter, then decays toward the 3' end (last ~25% of the read drops by
+ * up to ~18 points), simulating Illumina quality fall-off. Capped at Q40.
+ */
+function qualityProfile(
+  length: number,
+  baseQ: number,
+  rng: () => number,
+): Uint8Array {
+  const out = new Uint8Array(length);
+  const tailStart = Math.floor(length * 0.75);
+  for (let i = 0; i < length; i++) {
+    let q = baseQ + Math.floor(rng() * 7) - 3; // ±3 jitter
+    if (i >= tailStart && tailStart < length) {
+      const decayProgress = (i - tailStart) / (length - tailStart);
+      q -= Math.round(decayProgress * 18);
+    }
+    out[i] = Math.max(8, Math.min(40, q));
+  }
+  return out;
+}
+
+/**
+ * Realistic mapq distribution: ~85% of reads at high mapq (50–60), ~15%
+ * at lower mapq (25–45) — a small "ambiguous mapping" tail.
+ */
+function generateMapq(rng: () => number): number {
+  if (rng() < 0.85) {
+    return 50 + Math.floor(rng() * 11); // 50..60
+  }
+  return 25 + Math.floor(rng() * 21); // 25..45
 }
 
 /**
@@ -186,6 +220,20 @@ function applyScenariosToRead(
         }
         break;
       }
+      case 'low_quality_alt':
+        if (rng() < 0.5 && sc.altBase) {
+          read.bases[offset] = sc.altBase;
+          read.qualities[offset] = 10 + Math.floor(rng() * 9); // Q10..Q18
+        }
+        break;
+      case 'low_mapq_alt':
+        if (rng() < 0.5 && sc.altBase) {
+          read.bases[offset] = sc.altBase;
+          // Drag this read's mapq down — only reads carrying the alt
+          // become the "ambiguously mapped" ones.
+          read.mapq = 15 + Math.floor(rng() * 16); // 15..30
+        }
+        break;
     }
   }
 }

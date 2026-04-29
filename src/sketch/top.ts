@@ -29,11 +29,31 @@ import {
 } from '../lib/reference';
 import { buildReads, makeRng, MAX_PACKED_ROWS, type Read } from '../lib/reads';
 import { placeScenarios, type Scenario } from '../lib/scenarios';
-import type { Base } from '../lib/palette';
+import { deriveCandidate, readSupportsCandidate, type Candidate } from '../lib/candidate';
+import { sandboxState } from '../lib/sandbox-state';
+import { hitTestReads } from '../world/hit-test';
+import type { Base, Cell } from '../lib/palette';
+import type { Strand } from '../lib/reads';
+
+export interface HoverInfo {
+  readId: string;
+  startCol: number;
+  endCol: number;
+  strand: Strand;
+  mapq: number;
+  insertSize: number;
+  absCol: number;
+  base: Cell;
+  quality: number;
+  isPredictColumn: boolean;
+  supportsCandidate: boolean | null;
+  candidate: Candidate;
+}
 
 export interface SketchHandle {
   resetView: () => void;
   randomize: () => void;
+  hoverInfo: (sx: number, sy: number) => HoverInfo | null;
   destroy: () => void;
 }
 
@@ -44,6 +64,11 @@ const INITIAL_SEED = 42;
 export function mountTopSketch(container: HTMLElement): SketchHandle {
   let resetFn: () => void = () => {};
   let randomizeFn: () => void = () => {};
+  let camRef: Camera | null = null;
+  let readsRef: Read[] = [];
+  let referenceRef: Base[] = [];
+  const readsOriginRef = { x: 0, y: 0 };
+  const windowStartRef = { value: 0 };
 
   const size = () => ({
     w: container.clientWidth,
@@ -52,6 +77,7 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
 
   const instance = new p5((p: p5) => {
     const cam = new Camera();
+    camRef = cam;
 
     let reference: Base[] = [];
     let scenarios: Scenario[] = [];
@@ -63,10 +89,13 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
       reference = buildReference(DEFAULT_REFERENCE_LENGTH, seed);
       scenarios = placeScenarios(reference, rng);
       reads = buildReads(reference, scenarios, rng);
+      referenceRef = reference;
+      readsRef = reads;
     };
 
     generateWorld(INITIAL_SEED);
     windowStart = defaultWindowStart(reference.length);
+    windowStartRef.value = windowStart;
 
     const refWidth = REF_COUNT * CELL_W;
     const fullPileupWidth = reference.length * CELL_W;
@@ -77,6 +106,8 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
     const refOrigin = { x: 0, y: SCRUBBER_HEIGHT + REF_GAP };
     const rulerOrigin = { x: 0, y: refOrigin.y + CELL_H };
     const readsOrigin = { x: 0, y: rulerOrigin.y + RULER_HEIGHT + READS_GAP };
+    readsOriginRef.x = readsOrigin.x;
+    readsOriginRef.y = readsOrigin.y;
     const totalHeight =
       SCRUBBER_HEIGHT + REF_GAP + CELL_H + RULER_HEIGHT + READS_GAP + readsHeight;
 
@@ -96,6 +127,7 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
       const clamped = clampWindowStart(next, reference.length);
       if (clamped === windowStart) return;
       windowStart = clamped;
+      windowStartRef.value = windowStart;
     };
 
     const snapWindowToScenarios = (candidateStart: number): number => {
@@ -131,6 +163,7 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
       cam.x = (w - cw) / 2;
       cam.y = (h - ch) / 2;
       windowStart = defaultWindowStart(reference.length);
+      windowStartRef.value = windowStart;
     };
 
     resetFn = () => initializeView();
@@ -158,6 +191,7 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
       } else {
         windowStart = defaultWindowStart(reference.length);
       }
+      windowStartRef.value = windowStart;
 
       refCache?.invalidate();
       buildReadsCache();
@@ -218,6 +252,56 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
       );
     };
 
+    const drawSupportsMarkers = (candidate: Candidate, predictPos: number) => {
+      if (!candidate) return;
+      const dotX = refOrigin.x + Math.floor(WINDOW_LENGTH / 2) * CELL_W + CELL_W / 2;
+      const dotDiameter = 3 / cam.zoom;
+      p.noStroke();
+      p.fill(255, 220, 110, 235);
+      for (const read of reads) {
+        if (read.row >= MAX_PACKED_ROWS) continue;
+        const offset = predictPos - read.startCol;
+        if (offset < 0 || offset >= read.bases.length) continue;
+        if (read.bases[offset] !== candidate.base) continue;
+        const dotY =
+          readsOrigin.y + read.row * READ_ROW_H + READ_ROW_H - 3 / cam.zoom;
+        p.circle(dotX, dotY, dotDiameter);
+      }
+    };
+
+    const drawPredictLabel = (predictX: number, candidate: Candidate) => {
+      const margin = 6 / cam.zoom;
+      const triH = 7 / cam.zoom;
+      const labelY = refOrigin.y - margin - triH - 6 / cam.zoom;
+
+      let text: string;
+      let alphaR = 255;
+      let alphaG = 220;
+      let alphaB = 110;
+      let alpha: number;
+      if (candidate === null) {
+        text = 'no candidate';
+        alphaR = 140;
+        alphaG = 140;
+        alphaB = 140;
+        alpha = 200;
+      } else if (candidate.base === '-') {
+        text = `${candidate.refBase}\u2192del`;
+        alpha = 230;
+      } else {
+        text = `${candidate.refBase}\u2192${candidate.base}`;
+        alpha = 230;
+      }
+
+      p.noStroke();
+      p.fill(alphaR, alphaG, alphaB, alpha);
+      p.textFont('Inconsolata');
+      p.textStyle(p.BOLD);
+      p.textSize(11 / cam.zoom);
+      p.textAlign(p.CENTER, p.BOTTOM);
+      p.text(text, predictX, labelY);
+    };
+
     p.setup = () => {
       const { w, h } = size();
       p.createCanvas(w, h);
@@ -241,6 +325,12 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
     };
 
     p.draw = () => {
+      const predictPos = windowStart + Math.floor(WINDOW_LENGTH / 2);
+      const candidate = deriveCandidate(reads, reference, predictPos);
+      sandboxState.candidate = candidate;
+      const predictX =
+        refOrigin.x + Math.floor(WINDOW_LENGTH / 2) * CELL_W + CELL_W / 2;
+
       p.background(0);
       p.push();
       cam.apply(p);
@@ -289,7 +379,9 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
         );
       }
 
+      drawSupportsMarkers(candidate, predictPos);
       drawPredictMarker();
+      drawPredictLabel(predictX, candidate);
 
       p.pop();
     };
@@ -321,9 +413,45 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
     };
   }, container);
 
+  const hoverInfo = (sx: number, sy: number): HoverInfo | null => {
+    if (!camRef || !readsRef) return null;
+    const wp = camRef.screenToWorld(sx, sy);
+    const hit = hitTestReads(
+      wp.x,
+      wp.y,
+      readsRef,
+      readsOriginRef,
+      CELL_W,
+      READ_ROW_H,
+      MAX_PACKED_ROWS,
+    );
+    if (!hit) return null;
+    const predictPos = windowStartRef.value + Math.floor(WINDOW_LENGTH / 2);
+    const candidate = deriveCandidate(readsRef, referenceRef, predictPos);
+    const isPredictColumn = hit.absCol === predictPos;
+    const supportsCandidate = isPredictColumn && candidate
+      ? readSupportsCandidate(hit.read, predictPos, candidate)
+      : null;
+    return {
+      readId: hit.read.id,
+      startCol: hit.read.startCol,
+      endCol: hit.read.startCol + hit.read.bases.length - 1,
+      strand: hit.read.strand,
+      mapq: hit.read.mapq,
+      insertSize: hit.read.insertSize,
+      absCol: hit.absCol,
+      base: hit.base,
+      quality: hit.quality,
+      isPredictColumn,
+      supportsCandidate,
+      candidate,
+    };
+  };
+
   return {
     resetView: () => resetFn(),
     randomize: () => randomizeFn(),
+    hoverInfo,
     destroy: () => instance.remove(),
   };
 }

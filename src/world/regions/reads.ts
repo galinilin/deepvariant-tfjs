@@ -81,17 +81,20 @@ export function paintReadsBases(
     const bodyX = read.startCol * cellW;
     const bodyW = read.bases.length * cellW;
 
-    // One rounded "capsule" per read, strand-tinted, semi-transparent so
-    // mismatch letters dominate the visual hierarchy.
+    // Body alpha encodes mapping quality: high mapq stays at ~0.45 (current),
+    // low mapq fades the read body so the eye discounts its evidence.
+    const mapqClamped = Math.min(Math.max(read.mapq, 0), 60);
+    const bodyAlpha = 0.15 + 0.30 * (mapqClamped / 60);
+
     const strandColor =
       read.strand === 'forward' ? FORWARD_STRAND_COLOR : REVERSE_STRAND_COLOR;
-    ctx.fillStyle = `rgba(${strandColor[0]},${strandColor[1]},${strandColor[2]},0.45)`;
+    ctx.fillStyle = `rgba(${strandColor[0]},${strandColor[1]},${strandColor[2]},${bodyAlpha.toFixed(3)})`;
     ctx.beginPath();
     ctx.roundRect(bodyX, bodyY, bodyW, READ_BODY_HEIGHT, radius);
     ctx.fill();
 
-    // Per-cell overlays: mismatches as bold colored letters, deletions as
-    // a solid horizontal bar that visually replaces the body at that span.
+    // Per-cell overlays: mismatches as bold colored letters dimmed by base
+    // quality, deletions as a solid horizontal bar replacing the body.
     for (let i = 0; i < read.bases.length; i++) {
       const absCol = read.startCol + i;
       const cellX = absCol * cellW;
@@ -108,8 +111,10 @@ export function paintReadsBases(
       const refBase = reference[absCol] ?? 'N';
       if (base !== refBase) {
         const c = igvColor(base);
+        const q = Math.min(Math.max(read.qualities[i] ?? 0, 0), 40);
+        const letterAlpha = 0.40 + 0.60 * (q / 40);
         ctx.font = boldFont;
-        ctx.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`;
+        ctx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},${letterAlpha.toFixed(3)})`;
         ctx.fillText(base, cellCenterX, rowYCenter);
       }
     }
