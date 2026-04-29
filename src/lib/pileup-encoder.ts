@@ -145,3 +145,80 @@ export function encodeStats(
     windowEnd: startCol + PILEUP_WIDTH,
   };
 }
+
+/**
+ * Per-channel value sets observed across the 5 golden DV pileups (NA12878
+ * chr20 hom_alt SNVs). Channels with continuous distributions (base_qual,
+ * insert_size) are bounded ranges instead. Use these to sanity-check what
+ * `encodePileup` produces — values outside these sets/ranges are red flags.
+ */
+export const GOLDEN_CHANNEL_RANGES = {
+  read_base: { allowed: new Set([0, 30, 100, 180, 250]) },
+  base_quality: { min: 0, max: 254 },
+  mapping_quality: { min: 0, max: 254 },
+  strand: { allowed: new Set([0, 70, 240]) },
+  supports_variant: { allowed: new Set([0, 152, 254]) },
+  differs_from_ref: { allowed: new Set([0, 50, 254]) },
+  insert_size: { min: 0, max: 254 },
+};
+
+export interface ValidationReport {
+  passed: boolean;
+  issues: string[];
+  channelHistograms: Array<Record<number, number>>;
+}
+
+/**
+ * Audit a tensor produced by `encodePileup` against the value sets
+ * extracted from golden DV pileups. Discrete channels (read_base, strand,
+ * supports_variant, differs_from_ref) must use only allowed values;
+ * continuous channels are checked for in-range only. Returns histograms
+ * to make discrepancies easy to spot.
+ */
+export function validateEncodedTensor(tensor: Float32Array): ValidationReport {
+  const issues: string[] = [];
+  const histograms: Array<Record<number, number>> = Array.from(
+    { length: PILEUP_CHANNELS },
+    () => ({}),
+  );
+  const ranges = [
+    GOLDEN_CHANNEL_RANGES.read_base,
+    GOLDEN_CHANNEL_RANGES.base_quality,
+    GOLDEN_CHANNEL_RANGES.mapping_quality,
+    GOLDEN_CHANNEL_RANGES.strand,
+    GOLDEN_CHANNEL_RANGES.supports_variant,
+    GOLDEN_CHANNEL_RANGES.differs_from_ref,
+    GOLDEN_CHANNEL_RANGES.insert_size,
+  ];
+  const channelNames = [
+    'read_base',
+    'base_quality',
+    'mapping_quality',
+    'strand',
+    'supports_variant',
+    'differs_from_ref',
+    'insert_size',
+  ];
+
+  for (let ch = 0; ch < PILEUP_CHANNELS; ch++) {
+    const range = ranges[ch];
+    const hist = histograms[ch];
+    const violations = new Set<number>();
+    for (let i = ch; i < tensor.length; i += PILEUP_CHANNELS) {
+      const v = Math.round(tensor[i]);
+      hist[v] = (hist[v] ?? 0) + 1;
+      if ('allowed' in range && !range.allowed.has(v)) {
+        violations.add(v);
+      } else if ('min' in range && (v < range.min || v > range.max)) {
+        violations.add(v);
+      }
+    }
+    if (violations.size > 0) {
+      const list = Array.from(violations).sort((a, b) => a - b).slice(0, 10);
+      issues.push(
+        `[${ch}] ${channelNames[ch]}: ${violations.size} disallowed value(s) (showing up to 10): ${list.join(', ')}`,
+      );
+    }
+  }
+  return { passed: issues.length === 0, issues, channelHistograms: histograms };
+}
