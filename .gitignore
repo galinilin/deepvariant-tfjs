@@ -3,8 +3,12 @@ dist/
 .vite/
 *.log
 
-# Model + fixture artifacts are large and reproducible from /root/dv-tfjs/out/.
-# Run `npm run sync-models` to populate. If you want to commit them, switch to
-# Git LFS using the template in .gitattributes.
+# Model artifacts are heavy (~24 MB of TFJS shards) — kept synced via
+# `npm run sync-models` instead of committed.
 public/models/
-public/fixtures/
+
+# Fixtures (~5 MB total) ARE committed so verify-golden / inspect-golden /
+# verify-model run on a fresh clone without needing the sibling dv-tfjs repo
+# or running extract_golden.py. To regenerate them:
+#   cd /root/dv-tfjs && uv run python scripts/extract_golden.py \
+#     /root/deepvariant-tf-js/public/fixtures/ 5
