@@ -262,3 +262,69 @@ export function formatAlt(alt: AltDescriptor | CandidateInfo): string {
       return '+' + alt.altSequence.join('');
   }
 }
+
+/**
+ * Debug helper: returns a candidate at `position` regardless of DV's
+ * thresholds. Picks the most-common non-reference base; if every read
+ * matches reference, fabricates a synthetic SNV alt (next base in
+ * alphabetical order) so the encoder + model still have something to
+ * chew on. Use only when "force predict" debug is on — real DV would
+ * not propose a candidate here.
+ */
+export function deriveAnyAltCandidate(
+  reads: Read[],
+  reference: Base[],
+  position: number,
+): Candidate {
+  const refBase = reference[position];
+  if (!refBase || refBase === 'N') return null;
+  const snvCounts = new Map<Base, number>();
+  let delCount = 0;
+  let qualifying = 0;
+  for (const read of reads) {
+    const offset = position - read.startCol;
+    if (offset < 0 || offset >= read.bases.length) continue;
+    qualifying++;
+    const base = read.bases[offset];
+    if (base === '-') {
+      delCount++;
+    } else if (base !== refBase) {
+      snvCounts.set(base, (snvCounts.get(base) ?? 0) + 1);
+    }
+  }
+  let bestSnv: { base: Base; count: number } | null = null;
+  for (const [b, c] of snvCounts) {
+    if (!bestSnv || c > bestSnv.count) bestSnv = { base: b, count: c };
+  }
+  // If del has more support than any SNV alt, prefer del.
+  if (delCount > 0 && (!bestSnv || delCount > bestSnv.count)) {
+    return {
+      kind: 'del',
+      refBase,
+      supportingReads: delCount,
+      qualifyingReads: qualifying,
+    };
+  }
+  if (bestSnv) {
+    return {
+      kind: 'snv',
+      refBase,
+      altBase: bestSnv.base,
+      supportingReads: bestSnv.count,
+      qualifyingReads: qualifying,
+    };
+  }
+  // No alt evidence at all — synthesize a candidate so the model has
+  // something to predict against. The model will see no supporting reads,
+  // which should yield hom_ref.
+  const fallback: Base = (
+    refBase === 'A' ? 'C' : refBase === 'C' ? 'G' : refBase === 'G' ? 'T' : 'A'
+  );
+  return {
+    kind: 'snv',
+    refBase,
+    altBase: fallback,
+    supportingReads: 0,
+    qualifyingReads: qualifying,
+  };
+}

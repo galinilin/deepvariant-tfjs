@@ -65,6 +65,39 @@ function ensureModel(): Promise<DeepVariantModel> {
   return modelPromise;
 }
 
+function tensorChannelStats(tensor: Float32Array): {
+  supports254: number;
+  supports152: number;
+  differs254: number;
+  differs50: number;
+  filledRows: number;
+} {
+  let s254 = 0;
+  let s152 = 0;
+  let d254 = 0;
+  let d50 = 0;
+  const rowFilled = new Set<number>();
+  for (let i = 0; i < tensor.length; i += 7) {
+    const sup = Math.round(tensor[i + 4]);
+    const diff = Math.round(tensor[i + 5]);
+    if (sup === 254) s254++;
+    else if (sup === 152) s152++;
+    if (diff === 254) d254++;
+    else if (diff === 50) d50++;
+    if (Math.round(tensor[i]) !== 0) {
+      const row = Math.floor(i / 7 / 221);
+      rowFilled.add(row);
+    }
+  }
+  return {
+    supports254: s254,
+    supports152: s152,
+    differs254: d254,
+    differs50: d50,
+    filledRows: rowFilled.size,
+  };
+}
+
 async function runPrediction(
   tensor: Float32Array,
   position: number,
@@ -96,6 +129,25 @@ async function runPrediction(
     sandboxState.prediction = { ...result, position };
     lastPredictedPosition = position;
     lastPredictedGen = generation;
+    if (sandboxState.debugLogs) {
+      const stats = tensorChannelStats(tensor);
+      const cand = sandboxState.candidate;
+      const candDesc = cand
+        ? `${cand.kind}` +
+          (cand.kind === 'snv'
+            ? ` ${cand.refBase}>${cand.altBase}`
+            : cand.kind === 'del'
+              ? ` ${cand.refBase}>del`
+              : ` ${cand.refBase}>+${cand.altSequence.join('')}`)
+        : sandboxState.candidateForced
+          ? '(forced)'
+          : '(none)';
+      console.log(
+        `predict@${position + 1} cand=${candDesc} forced=${sandboxState.candidateForced} ` +
+          `→ ${result.argmax} probs=[${result.probs.hom_ref.toFixed(3)}, ${result.probs.het.toFixed(3)}, ${result.probs.hom_alt.toFixed(3)}] ` +
+          `support254=${stats.supports254} support152=${stats.supports152} differs254=${stats.differs254} filledRows=${stats.filledRows}`,
+      );
+    }
   } catch (err) {
     console.error('prediction failed:', err);
   } finally {
@@ -241,7 +293,7 @@ function drawPileupImagePanel(
   drawPanelChrome(p, x, y, w, h, 'Pileup Image');
 
   const tensor = sandboxState.pileupTensor;
-  if (!tensor || !sandboxState.candidate) {
+  if (!tensor) {
     drawCenterText(p, x, y, w, h, 'No candidate', NO_CANDIDATE_COLOR);
     return;
   }
@@ -343,12 +395,12 @@ function drawPredictionPanel(
   w: number,
   h: number,
 ): void {
-  const positionLabel = sandboxState.candidate
-    ? `pos ${sandboxState.pileupPosition + 1}`
+  const positionLabel = sandboxState.pileupTensor
+    ? `pos ${sandboxState.pileupPosition + 1}${sandboxState.candidateForced ? ' (forced)' : ''}`
     : '';
   drawPanelChrome(p, x, y, w, h, 'Prediction', positionLabel);
 
-  if (!sandboxState.candidate) {
+  if (!sandboxState.pileupTensor) {
     drawCenterText(p, x, y, w, h, 'No candidate', NO_CANDIDATE_COLOR);
     return;
   }

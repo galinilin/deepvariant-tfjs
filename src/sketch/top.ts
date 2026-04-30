@@ -30,6 +30,7 @@ import {
 import { buildReads, makeRng, MAX_PACKED_ROWS, type Read } from '../lib/reads';
 import { placeScenarios, type Scenario } from '../lib/scenarios';
 import {
+  deriveAnyAltCandidate,
   deriveCandidateOutcome,
   formatAlt,
   readSupportsCandidate,
@@ -358,27 +359,39 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
     p.draw = () => {
       const predictPos = windowStart + Math.floor(WINDOW_LENGTH / 2);
       const outcome = deriveCandidateOutcome(reads, reference, predictPos);
-      const candidate: Candidate =
+      const realCandidate: Candidate =
         outcome.kind === 'accepted' ? outcome.info : null;
-      sandboxState.candidate = candidate;
-      if (candidate) {
+      sandboxState.candidate = realCandidate;
+      // Decide which candidate to encode against. In force-predict debug
+      // mode, fall back to the most-common-alt heuristic when the real
+      // candidate is null so we still encode + predict.
+      let encodingCandidate: Candidate = realCandidate;
+      let forced = false;
+      if (!realCandidate && sandboxState.forcePredict) {
+        encodingCandidate = deriveAnyAltCandidate(reads, reference, predictPos);
+        forced = encodingCandidate !== null;
+      }
+      if (encodingCandidate) {
         const needsEncode =
           sandboxState.pileupPosition !== predictPos ||
-          lastEncodedGen !== sandboxState.readsGeneration;
+          lastEncodedGen !== sandboxState.readsGeneration ||
+          sandboxState.candidateForced !== forced;
         if (needsEncode) {
           sandboxState.pileupTensor = encodePileup(
             reads,
             reference,
             predictPos,
-            candidate,
+            encodingCandidate,
           );
           sandboxState.pileupPosition = predictPos;
+          sandboxState.candidateForced = forced;
           lastEncodedGen = sandboxState.readsGeneration;
           sandboxState.prediction = null;
         }
       } else {
         sandboxState.pileupTensor = null;
         sandboxState.pileupPosition = -1;
+        sandboxState.candidateForced = false;
         sandboxState.prediction = null;
       }
       const predictX =
@@ -432,7 +445,7 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
         );
       }
 
-      drawSupportsMarkers(candidate, predictPos);
+      drawSupportsMarkers(realCandidate, predictPos);
       drawPredictMarker();
       drawPredictLabel(predictX, outcome);
 

@@ -6,6 +6,7 @@ import {
   inspectGoldenChannels,
   compareEncoderAgainstGolden,
 } from './lib/parity';
+import { sandboxState } from './lib/sandbox-state';
 
 const topEl = document.getElementById('sketch-top');
 const bottomEl = document.getElementById('sketch-bottom');
@@ -52,6 +53,23 @@ verifyBtn?.addEventListener('click', async () => {
       verifyBtn.disabled = false;
     }, 6000);
   }
+});
+
+const debugBtn = document.getElementById('debug-force') as HTMLButtonElement | null;
+const renderDebugLabel = () => {
+  if (!debugBtn) return;
+  debugBtn.textContent = sandboxState.forcePredict ? 'Debug: on' : 'Debug: off';
+  debugBtn.style.color = sandboxState.forcePredict ? '#ffdc6e' : '';
+};
+renderDebugLabel();
+debugBtn?.addEventListener('click', () => {
+  sandboxState.forcePredict = !sandboxState.forcePredict;
+  sandboxState.debugLogs = sandboxState.forcePredict;
+  // Invalidate the current encoded tensor so the next frame re-encodes
+  // with the new mode. Setting pileupPosition to a sentinel forces re-encode.
+  sandboxState.pileupPosition = -1;
+  sandboxState.prediction = null;
+  renderDebugLabel();
 });
 
 const encoderBtn = document.getElementById('encoder-vs-golden') as HTMLButtonElement | null;
