@@ -39,17 +39,20 @@ export const BASE_INTENSITY: Record<Cell, number> = {
 };
 
 // Channel 1 — base_quality (Phred capped at 40, scaled to [0, 254])
+// DV truncates (floors) the scaled value rather than rounding — verified by
+// comparing our encoder output to golden tensors: every Math.round value was
+// exactly +1 higher than golden's, on every quality boundary.
 export const BASE_QUALITY_CAP = 40;
 export function encodeBaseQuality(q: number): number {
   const clamped = Math.max(0, Math.min(BASE_QUALITY_CAP, q));
-  return Math.round((clamped * 254) / BASE_QUALITY_CAP);
+  return Math.floor((clamped * 254) / BASE_QUALITY_CAP);
 }
 
 // Channel 2 — mapping_quality (mapq capped at 60, scaled to [0, 254])
 export const MAPQ_CAP = 60;
 export function encodeMapq(mq: number): number {
   const clamped = Math.max(0, Math.min(MAPQ_CAP, mq));
-  return Math.round((clamped * 254) / MAPQ_CAP);
+  return Math.floor((clamped * 254) / MAPQ_CAP);
 }
 
 // Channel 3 — strand
@@ -68,7 +71,7 @@ export const DIFFERS_FROM_REF_NO = 50;
 export const INSERT_SIZE_CAP = 1000;
 export function encodeInsertSize(tlen: number): number {
   const clamped = Math.min(INSERT_SIZE_CAP, Math.abs(tlen));
-  return Math.round((clamped * 254) / INSERT_SIZE_CAP);
+  return Math.floor((clamped * 254) / INSERT_SIZE_CAP);
 }
 
 // Reference-row defaults. From inspecting golden samples, every cell of a
