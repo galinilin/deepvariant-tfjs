@@ -32,17 +32,29 @@ const PILEUP_LABEL_FONT_SIZE = 10;
 let modelPromise: Promise<DeepVariantModel> | null = null;
 let modelInstance: DeepVariantModel | null = null;
 let modelError: string | null = null;
+let modelLoadProgress = 0;
 let lastPredictedPosition = -1;
 let lastPredictedGen = -1;
 let predictDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+/** What the active debounce timer (or pending-after-predict slot) is aiming
+ * to predict. Lets us skip the per-frame clear+reset that was preventing the
+ * timer from ever firing. */
+let pendingTarget: { pos: number; gen: number } | null = null;
 
 function ensureModel(): Promise<DeepVariantModel> {
   if (modelInstance) return Promise.resolve(modelInstance);
   if (modelPromise) return modelPromise;
   const base = import.meta.env.BASE_URL;
-  modelPromise = DeepVariantModel.load({ modelBaseUrl: `${base}models/` })
+  modelLoadProgress = 0;
+  modelPromise = DeepVariantModel.load({
+    modelBaseUrl: `${base}models/`,
+    onProgress: (frac) => {
+      modelLoadProgress = frac;
+    },
+  })
     .then((m) => {
       modelInstance = m;
+      modelLoadProgress = 1;
       return m;
     })
     .catch((err) => {
@@ -93,19 +105,35 @@ async function runPrediction(
 
 function maybeTriggerPrediction(): void {
   if (!sandboxState.pileupTensor) return;
+  const pos = sandboxState.pileupPosition;
+  const gen = sandboxState.readsGeneration;
+  if (pos === lastPredictedPosition && gen === lastPredictedGen) return;
+
+  // Already-scheduled timer aiming at the same target? Don't disturb it —
+  // resetting every frame is what kept the timer from ever elapsing.
   if (
-    sandboxState.pileupPosition === lastPredictedPosition &&
-    sandboxState.readsGeneration === lastPredictedGen
+    predictDebounceTimer &&
+    pendingTarget &&
+    pendingTarget.pos === pos &&
+    pendingTarget.gen === gen
   ) {
     return;
   }
-  if (sandboxState.predicting) return;
+
+  if (sandboxState.predicting) {
+    // Predict in flight. Record what we'd want next, so the post-finally
+    // p.draw sees the mismatch and schedules a fresh timer.
+    pendingTarget = { pos, gen };
+    return;
+  }
+
   if (predictDebounceTimer) clearTimeout(predictDebounceTimer);
+  pendingTarget = { pos, gen };
   const tensor = sandboxState.pileupTensor;
-  const position = sandboxState.pileupPosition;
-  const generation = sandboxState.readsGeneration;
   predictDebounceTimer = setTimeout(() => {
-    void runPrediction(tensor, position, generation);
+    predictDebounceTimer = null;
+    pendingTarget = null;
+    void runPrediction(tensor, pos, gen);
   }, 180);
 }
 
@@ -329,7 +357,15 @@ function drawPredictionPanel(
     return;
   }
   if (!sandboxState.prediction || sandboxState.predicting) {
-    const text = !modelInstance ? 'Loading model…' : 'Predicting…';
+    let text: string;
+    if (!modelInstance) {
+      const pct = Math.round(modelLoadProgress * 100);
+      text = modelPromise
+        ? `Loading model… ${pct}%`
+        : 'Loading model…';
+    } else {
+      text = 'Predicting…';
+    }
     drawCenterText(p, x, y, w, h, text, PLACEHOLDER_COLOR);
     return;
   }
