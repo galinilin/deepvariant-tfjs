@@ -1,9 +1,22 @@
-# Pileup encoder audit (v4.0 mid-flight)
+# Pileup encoder audit (v4.0)
 
-Branch: `feature/v4.0`. Stop point: encoder + UI shipped, but predictions
-look "buggy." Goal of this doc: be precise about *what we know is right*,
-*what we suspect is wrong*, and *exactly what to test next session* so we
-can resume without re-deriving everything.
+Branch: `feature/v4.0`. **Status: encoder empirically validated against
+upstream DV on real golden examples. 5/5 argmax match, all per-channel
+value-set diffs explained by read-selection differences (not encoding).**
+
+History:
+1. We had golden tensors but no source reads → could only do indirect validation.
+2. Cloned DV r1.8 testdata, found the source NA12878 BAM + hg19 FASTA.
+3. Added `dv-tfjs/scripts/extract_reads_for_golden.py` — parses the
+   variant proto from each golden calling example, extracts the supporting
+   reads from the BAM via pysam, dumps as JSON sidecars in our Read[] schema.
+4. Added `compareEncoderAgainstGolden` — encodes the extracted reads
+   through our encoder, predicts, diffs argmax + per-channel value sets
+   against the golden tensor.
+5. First run revealed a systematic +1 in base_quality / mapping_quality:
+   we used `Math.round`, DV uses `Math.floor`. Fixed in commit `16bef41`.
+6. Second run (post-fix): argmax 5/5, diffs collapse to read-selection
+   artifacts — no encoding bugs remain.
 
 ## Hard ground truth (extracted from golden_pileups.npy)
 
