@@ -1,5 +1,13 @@
 # Pileup encoder audit (v4.0)
 
+> ⚠️ **2026-04-30 — v4.0 abandoned, restart on `feature/v4.1` off v3.0.**
+> Encoder + parity infrastructure is validated and worth keeping; the live
+> UI integration on v4.0 (bottom canvas channel-strip rendering, live
+> prediction triggering, debug toggle) was buggy and synthetic-data
+> predictions don't make intuitive sense (always hom_alt). See
+> `drafts/v4-1-handoff.md` for the full state-of-play and recommended
+> path forward.
+
 Branch: `feature/v4.0`. **Status: encoder empirically validated against
 upstream DV on real golden examples. 5/5 argmax match, all per-channel
 value-set diffs explained by read-selection differences (not encoding).**
