@@ -1,0 +1,52 @@
+[
+  {
+    "index": 0,
+    "pred": "hom_alt",
+    "probs": {
+      "hom_ref": 0.0,
+      "het": 1.2212421862311875e-20,
+      "hom_alt": 1.0
+    },
+    "variant_summary": "C: TZO VAF ]t DP 87 AD NA12878h chr20"
+  },
+  {
+    "index": 1,
+    "pred": "hom_alt",
+    "probs": {
+      "hom_ref": 0.0,
+      "het": 1.7456324662440544e-16,
+      "hom_alt": 1.0
+    },
+    "variant_summary": "C: TZO DP 8; VAF 'u AD NA12878h chr20"
+  },
+  {
+    "index": 2,
+    "pred": "hom_alt",
+    "probs": {
+      "hom_ref": 0.0,
+      "het": 2.3375861070133356e-27,
+      "hom_alt": 1.0
+    },
+    "variant_summary": "T: GZO AD 8H DP 8H VAF ?: NA12878h chr20"
+  },
+  {
+    "index": 3,
+    "pred": "hom_alt",
+    "probs": {
+      "hom_ref": 0.0,
+      "het": 1.766247703061388e-26,
+      "hom_alt": 1.0
+    },
+    "variant_summary": "T: AZO DP 8. AD 8. VAF ?: NA12878h chr20"
+  },
+  {
+    "index": 4,
+    "pred": "hom_alt",
+    "probs": {
+      "hom_ref": 0.0,
+      "het": 2.4344686168901357e-15,
+      "hom_alt": 1.0
+    },
+    "variant_summary": "G: AZO AD VAF UUUUUU DP 80: NA12878h chr20"
+  }
+]
