@@ -1,7 +1,11 @@
 import { mountTopSketch, type HoverInfo } from './sketch/top';
 import { mountBottomSketch } from './sketch/bottom';
 import { formatAlt, type CandidateOutcome } from './lib/candidate';
-import { verifyGoldenParity, inspectGoldenChannels } from './lib/parity';
+import {
+  verifyGoldenParity,
+  inspectGoldenChannels,
+  compareEncoderAgainstGolden,
+} from './lib/parity';
 
 const topEl = document.getElementById('sketch-top');
 const bottomEl = document.getElementById('sketch-bottom');
@@ -47,6 +51,64 @@ verifyBtn?.addEventListener('click', async () => {
       verifyBtn.textContent = original;
       verifyBtn.disabled = false;
     }, 6000);
+  }
+});
+
+const encoderBtn = document.getElementById('encoder-vs-golden') as HTMLButtonElement | null;
+encoderBtn?.addEventListener('click', async () => {
+  const original = encoderBtn.textContent ?? 'Encoder vs golden';
+  encoderBtn.disabled = true;
+  try {
+    const { DeepVariantModel } = await import('./lib/DeepVariantModel');
+    const base = (import.meta.env.BASE_URL || '/');
+    encoderBtn.textContent = 'Loading model…';
+    const model = await DeepVariantModel.load({ modelBaseUrl: `${base}models/` });
+    const summary: string[] = [];
+    let allMatch = true;
+    for (let idx = 0; idx < 5; idx++) {
+      encoderBtn.textContent = `Sample ${idx}/5…`;
+      const result = await compareEncoderAgainstGolden({
+        sampleIndex: idx,
+        model,
+        onProgress: (s) => {
+          encoderBtn.textContent = `[${idx}] ${s}`;
+        },
+      });
+      console.group(
+        `[${idx}] ${result.variant}: ours=${result.ourArgmax} golden=${result.goldenArgmax} ${result.argmaxMatch ? '✓' : '✗'}`,
+      );
+      console.log(
+        `  our probs:    [${result.ourProbs.map((v) => v.toFixed(4)).join(', ')}]`,
+      );
+      console.log(
+        `  golden probs: [${result.goldenProbs.map((v) => v.toFixed(4)).join(', ')}]`,
+      );
+      for (const ch of result.channelStats) {
+        const extra = ch.extraInOurs.length ? ` extraInOurs=[${ch.extraInOurs.join(',')}]` : '';
+        const missing = ch.missingFromOurs.length
+          ? ` missingFromOurs=[${ch.missingFromOurs.join(',')}]`
+          : '';
+        const flag = ch.extraInOurs.length || ch.missingFromOurs.length ? '⚠' : '✓';
+        console.log(`  ${flag} ${ch.channel}:${extra}${missing}`);
+      }
+      console.groupEnd();
+      summary.push(
+        `[${idx}] ${result.argmaxMatch ? '✓' : '✗'} ours=${result.ourArgmax} golden=${result.goldenArgmax}`,
+      );
+      if (!result.argmaxMatch) allMatch = false;
+    }
+    model.dispose();
+    console.log('---');
+    summary.forEach((s) => console.log(s));
+    encoderBtn.textContent = allMatch ? 'Encoder ✓ (5/5)' : `Encoder ✗ (see console)`;
+  } catch (err) {
+    console.error('encoder-vs-golden failed:', err);
+    encoderBtn.textContent = 'Failed (see console)';
+  } finally {
+    setTimeout(() => {
+      encoderBtn.textContent = original;
+      encoderBtn.disabled = false;
+    }, 8000);
   }
 });
 

@@ -215,6 +215,181 @@ export interface GoldenLabel {
  * semantic test than `verifyParity` (which uses synthetic noise): this
  * confirms the model behaves on actual DV data the way Python does.
  */
+/**
+ * The big one: load the source reads we extracted from DV's testdata BAM,
+ * encode them through OUR encoder, then check whether
+ *   (a) the model agrees with upstream on argmax for the same inputs, and
+ *   (b) per-channel value sets match the golden tensor.
+ *
+ * Mismatches isolate exactly which channel(s) our encoder gets wrong.
+ */
+export interface EncoderRoundTripResult {
+  sampleIndex: number;
+  variant: string;
+  ourArgmax: 'hom_ref' | 'het' | 'hom_alt';
+  goldenArgmax: 'hom_ref' | 'het' | 'hom_alt';
+  ourProbs: [number, number, number];
+  goldenProbs: [number, number, number];
+  argmaxMatch: boolean;
+  channelStats: Array<{
+    channel: string;
+    ourUnique: number[];
+    goldenUnique: number[];
+    extraInOurs: number[];
+    missingFromOurs: number[];
+  }>;
+}
+
+export async function compareEncoderAgainstGolden(opts: {
+  sampleIndex: number;
+  fixtureBaseUrl?: string;
+  modelBaseUrl?: string;
+  onProgress?: (s: string) => void;
+  /** Pre-loaded model to reuse across multiple sample comparisons. If
+   * provided, this function won't dispose it. */
+  model?: DeepVariantModel;
+}): Promise<EncoderRoundTripResult> {
+  const { encodePileup } = await import('./pileup-encoder');
+  const base = import.meta.env.BASE_URL;
+  const fixtureBase = (opts.fixtureBaseUrl ?? `${base}fixtures/`).replace(/\/?$/, '/');
+  const modelBase = opts.modelBaseUrl ?? `${base}models/`;
+  const onProgress = opts.onProgress ?? (() => {});
+
+  onProgress('Loading reads + golden tensors…');
+  const [readsResp, goldenBuf, outputsBuf] = await Promise.all([
+    fetch(`${fixtureBase}golden_reads_${opts.sampleIndex}.json`).then((r) => r.json()),
+    fetch(`${fixtureBase}golden_pileups.npy`).then((r) => r.arrayBuffer()),
+    fetch(`${fixtureBase}golden_outputs.npy`).then((r) => r.arrayBuffer()),
+  ]);
+  const goldenAll = readNpyFloat32(goldenBuf);
+  const goldenOutputs = readNpyFloat32(outputsBuf);
+  const sampleSize = 100 * 221 * 7;
+  const goldenTensor = goldenAll.data.slice(
+    opts.sampleIndex * sampleSize,
+    (opts.sampleIndex + 1) * sampleSize,
+  );
+  const goldenProbs: [number, number, number] = [
+    goldenOutputs.data[opts.sampleIndex * 3],
+    goldenOutputs.data[opts.sampleIndex * 3 + 1],
+    goldenOutputs.data[opts.sampleIndex * 3 + 2],
+  ];
+
+  onProgress('Encoding via our encoder…');
+  const sample = readsResp as {
+    candidate: { kind: 'snv' | 'del' | 'ins'; refBase: string; altBase?: string; altSequence?: string[] };
+    ref_window: string;
+    position_in_window: number;
+    reads: Array<{
+      id: string;
+      startCol: number;
+      bases: string[];
+      qualities: number[];
+      strand: 'forward' | 'reverse';
+      mapq: number;
+      insertSize: number;
+      row: number;
+      insertions: Array<{ offset: number; bases: string[]; qualities: number[] }> | null;
+    }>;
+    chrom: string;
+    position_genomic: number;
+    ref_alleles: string;
+    alt_alleles: string[];
+  };
+
+  const reference = sample.ref_window.split('') as import('./palette').Base[];
+  const reads = sample.reads.map((r, i) => ({
+    id: r.id,
+    startCol: r.startCol,
+    bases: r.bases as import('./palette').Cell[],
+    qualities: new Uint8Array(r.qualities),
+    strand: r.strand,
+    mapq: r.mapq,
+    insertSize: r.insertSize,
+    row: i,
+    insertions: r.insertions
+      ? r.insertions.map((ins) => ({
+          offset: ins.offset,
+          bases: ins.bases as import('./palette').Base[],
+          qualities: new Uint8Array(ins.qualities),
+        }))
+      : undefined,
+  }));
+  const candidate =
+    sample.candidate.kind === 'snv'
+      ? {
+          kind: 'snv' as const,
+          refBase: sample.candidate.refBase as import('./palette').Base,
+          altBase: sample.candidate.altBase as import('./palette').Base,
+          supportingReads: 0,
+          qualifyingReads: reads.length,
+        }
+      : sample.candidate.kind === 'del'
+        ? {
+            kind: 'del' as const,
+            refBase: sample.candidate.refBase as import('./palette').Base,
+            supportingReads: 0,
+            qualifyingReads: reads.length,
+          }
+        : {
+            kind: 'ins' as const,
+            refBase: sample.candidate.refBase as import('./palette').Base,
+            altSequence: (sample.candidate.altSequence ?? []) as import('./palette').Base[],
+            supportingReads: 0,
+            qualifyingReads: reads.length,
+          };
+
+  const tensor = encodePileup(reads, reference, sample.position_in_window, candidate);
+  if (!tensor) {
+    throw new Error(`encoder returned null for sample ${opts.sampleIndex}`);
+  }
+
+  onProgress('Running prediction on our tensor…');
+  const model = opts.model ?? (await DeepVariantModel.load({ modelBaseUrl: modelBase }));
+  const ourResult = await model.predict(tensor);
+  if (!opts.model) model.dispose();
+
+  const ourProbs: [number, number, number] = [
+    ourResult.probs.hom_ref,
+    ourResult.probs.het,
+    ourResult.probs.hom_alt,
+  ];
+  const ourArgmax = DV_CLASSES[argmax3(ourProbs)] as 'hom_ref' | 'het' | 'hom_alt';
+  const goldenArgmax = DV_CLASSES[argmax3(goldenProbs)] as 'hom_ref' | 'het' | 'hom_alt';
+
+  // Per-channel value-set comparison
+  const channelStats: EncoderRoundTripResult['channelStats'] = [];
+  for (let ch = 0; ch < 7; ch++) {
+    const ours = new Set<number>();
+    const theirs = new Set<number>();
+    for (let i = 0; i < tensor.length; i += 7) {
+      ours.add(Math.round(tensor[i + ch]));
+    }
+    for (let i = 0; i < goldenTensor.length; i += 7) {
+      theirs.add(Math.round(goldenTensor[i + ch]));
+    }
+    const extra = Array.from(ours).filter((v) => !theirs.has(v));
+    const missing = Array.from(theirs).filter((v) => !ours.has(v));
+    channelStats.push({
+      channel: CHANNEL_NAMES[ch],
+      ourUnique: Array.from(ours).sort((a, b) => a - b),
+      goldenUnique: Array.from(theirs).sort((a, b) => a - b),
+      extraInOurs: extra.sort((a, b) => a - b),
+      missingFromOurs: missing.sort((a, b) => a - b),
+    });
+  }
+
+  return {
+    sampleIndex: opts.sampleIndex,
+    variant: `${sample.chrom}:${sample.position_genomic + 1} ${sample.ref_alleles}>${sample.alt_alleles.join(',')}`,
+    ourArgmax,
+    goldenArgmax,
+    ourProbs,
+    goldenProbs,
+    argmaxMatch: ourArgmax === goldenArgmax,
+    channelStats,
+  };
+}
+
 export async function verifyGoldenParity(opts?: {
   fixtureBaseUrl?: string;
   modelBaseUrl?: string;
