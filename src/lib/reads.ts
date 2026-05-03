@@ -28,10 +28,14 @@ export interface Read {
   insertions?: Insertion[];
 }
 
-export const DEFAULT_READ_COUNT = 40;
+// v3.2: bumped read count + scenario coverage floor + visible packed rows
+// to land synthetic input inside DV's WGS training distribution (~30× depth,
+// ~95-row pileup at the candidate). Old values were ~5× depth, biasing
+// every prediction toward hom_alt regardless of scenario.
+export const DEFAULT_READ_COUNT = 250;
 export const READ_MIN_LENGTH = 90;
 export const READ_MAX_LENGTH = 130;
-export const MAX_PACKED_ROWS = 14;
+export const MAX_PACKED_ROWS = 20;
 
 export function makeRng(seed: number): () => number {
   let x = seed | 0;
@@ -41,7 +45,10 @@ export function makeRng(seed: number): () => number {
   };
 }
 
-const SCENARIO_COVERAGE_FLOOR = 4;
+// Each scenario gets at least this many reads guaranteed to span its
+// position. 30 matches DV's WGS ~30× training depth — predictions on
+// scenarios end up in DV's calibrated softmax range.
+const SCENARIO_COVERAGE_FLOOR = 30;
 
 export function buildReads(
   reference: Base[],
@@ -91,6 +98,15 @@ export function buildReads(
   return reads;
 }
 
+// Per-base sequencing error rate. Illumina is typically 0.1–1%;
+// 0.7% lands the encoded image's `differs_from_ref=254` cell count near
+// the 40–78 range we see in real BAM golden tensors. Without this noise
+// the synthetic image is suspiciously clean and the DV model — trained
+// on real noisy BAMs — interprets the few clean variant cells as
+// overwhelming evidence (always hom_alt), even on 50% het scenarios.
+const SEQUENCING_ERROR_RATE = 0.007;
+const ACGT: Base[] = ['A', 'C', 'G', 'T'];
+
 function makeRead(
   id: string,
   startCol: number,
@@ -101,6 +117,24 @@ function makeRead(
   const bases: Cell[] = reference.slice(startCol, startCol + length);
   const qualities = qualityProfile(length, 36, rng);
   const strand: Strand = rng() < 0.5 ? 'forward' : 'reverse';
+
+  // Sprinkle realistic sequencing errors. Each base independently has a
+  // small chance of being miscalled (random non-ref base) and gets a
+  // moderate quality (Q15–Q25 — error bases are typically lower-Q).
+  for (let i = 0; i < length; i++) {
+    if (rng() < SEQUENCING_ERROR_RATE) {
+      const ref = bases[i];
+      if (ref !== '-' && ref !== 'N') {
+        let alt: Base;
+        do {
+          alt = ACGT[Math.floor(rng() * 4)];
+        } while (alt === ref);
+        bases[i] = alt;
+        qualities[i] = 15 + Math.floor(rng() * 11);
+      }
+    }
+  }
+
   return {
     id,
     startCol,

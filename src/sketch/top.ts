@@ -208,6 +208,10 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
 
       refCache?.invalidate();
       buildReadsCache();
+
+      // Bump the generation counter so the bottom canvas knows to
+      // invalidate any cached prediction tied to the previous reads set.
+      sandboxState.readsGeneration += 1;
     };
 
     randomizeFn = randomize;
@@ -357,7 +361,11 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
       const outcome = deriveCandidateOutcome(reads, reference, predictPos);
       const candidate: Candidate =
         outcome.kind === 'accepted' ? outcome.info : null;
+      // Publish the full state the bottom canvas needs to encode + predict.
       sandboxState.candidate = candidate;
+      sandboxState.reads = reads;
+      sandboxState.reference = reference;
+      sandboxState.predictPos = predictPos;
       const predictX =
         refOrigin.x + Math.floor(WINDOW_LENGTH / 2) * CELL_W + CELL_W / 2;
 

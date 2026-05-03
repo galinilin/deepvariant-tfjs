@@ -40,7 +40,10 @@ const EXTRA_POOL: ScenarioType[] = [
   'low_mapq_alt',
 ];
 
-const MIN_SPACING = 50;
+// v3.2: spacing >= window width so the 221-bp pileup window contains at
+// most one scenario at a time. Real-BAM density is ~1 per 1000 bp; we're
+// ~1 per 500 bp here — denser than real, but no longer pathological.
+const MIN_SPACING = 350;
 const BASES: Base[] = ['A', 'C', 'G', 'T'];
 
 export interface PlaceScenariosOptions {
@@ -56,7 +59,10 @@ export function placeScenarios(reference: Base[], rng: () => number): Scenario[]
   // below this are unreachable as predict targets.
   const reachableStart = Math.floor(WINDOW_LENGTH / 2);
   const reachableEnd = refLength - WINDOW_LENGTH + Math.floor(WINDOW_LENGTH / 2);
-  const total = 8 + Math.floor(rng() * 3); // 8, 9, or 10
+  // v3.2: 3 scenarios per generation. Sparser variant density keeps the
+  // pileup window single-candidate (matches DV's training expectation),
+  // while still exercising 3 distinct variant types per Randomize.
+  const total = 3;
 
   const types: ScenarioType[] = [...REQUIRED_TYPES];
   while (types.length < total) {

@@ -1,6 +1,72 @@
 import { mountTopSketch, type HoverInfo } from './sketch/top';
 import { mountBottomSketch } from './sketch/bottom';
 import { formatAlt, type CandidateOutcome } from './lib/candidate';
+import { encodePileup, validateEncodedTensor } from './lib/pileup-encoder';
+import { sandboxState } from './lib/sandbox-state';
+
+// Debug helpers exposed on window for ad-hoc inspection from the browser
+// console. Run e.g. `dvDebug.predictColumnStats()` to see what the
+// encoder is producing at the candidate column for the current state.
+(globalThis as unknown as { dvDebug: unknown }).dvDebug = {
+  state: () => ({
+    candidate: sandboxState.candidate,
+    nReads: sandboxState.reads?.length ?? 0,
+    refLen: sandboxState.reference?.length ?? 0,
+    predictPos: sandboxState.predictPos,
+    generation: sandboxState.readsGeneration,
+  }),
+  encode: () => {
+    if (!sandboxState.reads || !sandboxState.reference || sandboxState.predictPos === null || !sandboxState.candidate) {
+      return null;
+    }
+    return encodePileup(
+      sandboxState.reads,
+      sandboxState.reference,
+      sandboxState.predictPos,
+      sandboxState.candidate,
+    );
+  },
+  validate: () => {
+    const t = (globalThis as unknown as { dvDebug: { encode: () => Float32Array | null } }).dvDebug.encode();
+    return t ? validateEncodedTensor(t) : null;
+  },
+  predictColumnStats: () => {
+    const t = (globalThis as unknown as { dvDebug: { encode: () => Float32Array | null } }).dvDebug.encode();
+    if (!t) return null;
+    const PREDICT_COL = 110;
+    const W = 221;
+    const C = 7;
+    const names = ['read_base', 'base_quality', 'mapping_quality', 'strand', 'supports_variant', 'differs_from_ref', 'insert_size'];
+    const stats: { ch: string; counts: [number, number][] }[] = [];
+    for (let ch = 0; ch < C; ch++) {
+      const counts = new Map<number, number>();
+      for (let row = 0; row < 100; row++) {
+        const v = Math.round(t[row * W * C + PREDICT_COL * C + ch]);
+        counts.set(v, (counts.get(v) ?? 0) + 1);
+      }
+      stats.push({
+        ch: names[ch],
+        counts: Array.from(counts.entries()).sort((a, b) => b[1] - a[1]),
+      });
+    }
+    return stats;
+  },
+  rowSummary: () => {
+    const t = (globalThis as unknown as { dvDebug: { encode: () => Float32Array | null } }).dvDebug.encode();
+    if (!t) return null;
+    const W = 221;
+    const C = 7;
+    let yes = 0, no = 0, empty = 0;
+    for (let row = 0; row < 100; row++) {
+      // Look at supports_variant (ch 4) at the predict column for this row
+      const v = Math.round(t[row * W * C + 110 * C + 4]);
+      if (v === 254) yes++;
+      else if (v === 152) no++;
+      else if (v === 0) empty++;
+    }
+    return { yes, no, empty };
+  },
+};
 
 const topEl = document.getElementById('sketch-top');
 const bottomEl = document.getElementById('sketch-bottom');
