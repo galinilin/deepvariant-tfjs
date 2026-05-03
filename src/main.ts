@@ -167,9 +167,11 @@ async function startWorld(kind: 'synthetic' | 'real-bam'): Promise<void> {
     const [model, world] = await Promise.all([loadModel(), buildingWorld]);
 
     // Reveal sandbox containers before mounting so canvas size measurement
-    // sees the right viewport dimensions.
+    // sees the right viewport dimensions. Use .sandbox-revealed (instead
+    // of just removing .hidden-until-ready) so the containers fade in
+    // over 0.4s instead of hard-cutting in.
     document.querySelectorAll('.hidden-until-ready').forEach((el) => {
-      (el as HTMLElement).classList.remove('hidden-until-ready');
+      (el as HTMLElement).classList.add('sandbox-revealed');
     });
 
     top = mountTopSketch(topEl, world);

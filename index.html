@@ -154,6 +154,12 @@
       /* ----- Welcome overlay (v5.3) ----- */
       .hidden-until-ready {
         visibility: hidden;
+        opacity: 0;
+      }
+      .sandbox-revealed {
+        visibility: visible;
+        opacity: 1;
+        transition: opacity 0.4s ease;
       }
       .welcome-overlay {
         position: fixed;
