@@ -94,18 +94,12 @@ export async function buildWorld(opts: WorldOpts): Promise<World> {
     '/',
   );
 
-  const [metaResp, refResp, candResp, readsBuf] = await Promise.all([
+  const [metaResp, refResp, candResp, readsJson] = await Promise.all([
     fetch(`${base}meta.json`).then((r) => r.json() as Promise<RealBamMeta>),
     fetch(`${base}reference.txt`).then((r) => r.text()),
     fetch(`${base}candidates.json`).then((r) => r.json() as Promise<CandidateJson[]>),
-    fetch(`${base}reads.json.gz`).then((r) => r.arrayBuffer()),
+    fetch(`${base}reads.json`).then((r) => r.json() as Promise<ReadJson[]>),
   ]);
-
-  // Decompress gzipped reads via the platform's native DecompressionStream.
-  const ds = new DecompressionStream('gzip');
-  const readsBlob = new Blob([readsBuf]);
-  const decompressed = await new Response(readsBlob.stream().pipeThrough(ds)).text();
-  const readsJson = JSON.parse(decompressed) as ReadJson[];
 
   const reference: Base[] = refResp.split('').map((c) => c.toUpperCase() as Base);
 

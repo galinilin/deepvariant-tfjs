@@ -5,7 +5,9 @@ real-bam world-builder loads at startup.
 Output bundle in public/fixtures/browser-region/:
   meta.json         { chrom, region_start, region_end, n_reads, n_candidates }
   reference.txt     plain ASCII reference sequence (one line, region length chars)
-  reads.json.gz     gzipped JSON array of Read objects in our TS schema
+  reads.json        JSON array of Read objects in our TS schema (~1.8 MB
+                    plain, but the dev server + GH Pages both
+                    transport-compress, so wire size is ~200 KB)
   candidates.json   DV-emitted candidates with positions in region-relative coords
 
 Inputs (hardcoded — DV r1.8 testdata):
@@ -24,7 +26,6 @@ Or directly:
 
 from __future__ import annotations
 
-import gzip
 import json
 import sys
 from pathlib import Path
@@ -366,10 +367,12 @@ def main() -> None:
         )
     )
 
-    with gzip.open(OUT_DIR / "reads.json.gz", "wt", encoding="ascii") as f:
-        json.dump(reads, f)
-    reads_size = (OUT_DIR / "reads.json.gz").stat().st_size
-    print(f"[reads] wrote reads.json.gz ({reads_size/1024:.1f} KB)")
+    # Store uncompressed: Vite auto-decompresses .gz files which collides
+    # with our DecompressionStream. Both dev server and GH Pages
+    # transport-compress on the wire, so wire size still small.
+    (OUT_DIR / "reads.json").write_text(json.dumps(reads))
+    reads_size = (OUT_DIR / "reads.json").stat().st_size
+    print(f"[reads] wrote reads.json ({reads_size/1024:.1f} KB)")
 
     (OUT_DIR / "candidates.json").write_text(json.dumps(candidates, indent=2))
     cand_size = (OUT_DIR / "candidates.json").stat().st_size
