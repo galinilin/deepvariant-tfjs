@@ -12,10 +12,18 @@ export interface PredictionResult {
   confidence: number;
 }
 
+export type LoadStage = 'fetching' | 'warming' | 'ready';
+
 export interface LoadOptions {
   precision?: 'float32' | 'uint8';
   modelBaseUrl?: string;
+  /** Download progress (0..1) — fired during weight-shard fetches. */
   onProgress?: (fraction: number) => void;
+  /** Phase transitions: 'fetching' → 'warming' → 'ready'. The warming
+   * phase compiles ~70 WebGL conv shaders by running one zero-tensor
+   * predict; without this the first user-triggered predict eats
+   * 200–1000 ms of shader compilation. */
+  onStage?: (stage: LoadStage) => void;
 }
 
 export interface BatchInput {
@@ -38,9 +46,28 @@ export class DeepVariantModel {
     const base = (opts.modelBaseUrl ?? '/models/').replace(/\/?$/, '/');
     const dir = precision === 'uint8' ? 'tfjs_dv_wgs_uint8' : 'tfjs_dv_wgs';
     await tf.ready();
+    opts.onStage?.('fetching');
     const model = await tf.loadLayersModel(`${base}${dir}/model.json`, {
       onProgress: opts.onProgress,
     });
+
+    // Yield to the event loop so the welcome status update from the last
+    // onProgress callback gets a chance to repaint before the warmup
+    // freezes the main thread again.
+    opts.onStage?.('warming');
+    await new Promise((r) => setTimeout(r, 16));
+
+    // Warmup: run one inference on a zero tensor. Forces every WebGL
+    // shader for InceptionV3's ~70 conv ops to compile NOW (still on the
+    // welcome screen, before any user-visible interaction). After this
+    // the first user-triggered predict is ~10× faster.
+    const warmInput = tf.zeros([1, ...DV_INPUT_SHAPE]);
+    const warmOutput = model.predict(warmInput) as tf.Tensor;
+    await warmOutput.data();
+    warmInput.dispose();
+    warmOutput.dispose();
+
+    opts.onStage?.('ready');
     return new DeepVariantModel(model, precision, tf.getBackend());
   }
 

@@ -187,7 +187,7 @@ export function mountBottomSketch(
         result.probs.hom_alt,
       ];
       recordPrediction(probs, result.argmax, performance.now() - t0);
-      const channelImages = buildChannelImages(instance, tensor);
+      const channelImages = await buildChannelImages(instance, tensor);
       cached = {
         pos: target.pos,
         generation: target.generation,
@@ -416,7 +416,15 @@ export function mountBottomSketch(
     p.text(msg, x + w / 2, y + h / 2);
   }
 
-  function buildChannelImages(p: p5, tensor: Float32Array): p5.Image[] {
+  /**
+   * Build the 7 grayscale channel strips. Each strip is 100×221 = 22,100
+   * RGBA pixels (~88 KB). Total ~615 KB across 7 channels. The work is
+   * mostly synchronous Uint8 writes which can pause the main thread for
+   * 5-10 ms — enough to drop a p5 frame on the top canvas. Yielding
+   * between channels lets requestAnimationFrame tick in between, keeping
+   * pan/scrub/scrubber smooth even on slower hardware.
+   */
+  async function buildChannelImages(p: p5, tensor: Float32Array): Promise<p5.Image[]> {
     const out: p5.Image[] = [];
     for (let ch = 0; ch < N_CHANNELS; ch++) {
       const img = p.createImage(TENSOR_W, TENSOR_H);
@@ -433,6 +441,13 @@ export function mountBottomSketch(
       }
       img.updatePixels();
       out.push(img);
+      // Yield between channels so the top canvas's draw loop can tick.
+      // The tradeoff is the prediction panel shows "predicting…" for
+      // ~7 extra frames after the model returns, but the top canvas
+      // stays buttery.
+      if (ch < N_CHANNELS - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
     }
     return out;
   }

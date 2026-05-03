@@ -111,8 +111,15 @@ import('./lib/DeepVariantModel').then(async ({ DeepVariantModel }) => {
           lastPercent = pct;
         }
       },
+      onStage: (stage) => {
+        if (!welcomeStatus) return;
+        if (stage === 'warming') {
+          welcomeStatus.textContent = 'Compiling shaders…';
+        } else if (stage === 'ready') {
+          welcomeStatus.textContent = 'Model ready · pick a mode';
+        }
+      },
     });
-    if (welcomeStatus) welcomeStatus.textContent = 'Model ready · pick a mode';
     if (synthBtn) synthBtn.disabled = false;
     if (realBtn) realBtn.disabled = false;
 
