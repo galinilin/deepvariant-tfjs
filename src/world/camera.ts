@@ -9,8 +9,11 @@ export class Camera {
   x = 0;
   y = 0;
   zoom = 1;
-  minZoom = 0.3;
-  maxZoom = 3;
+  // Tightened from 0.3..3 → 0.6..1.6. Anything outside this range tends
+  // to either render text far smaller than legible or zoom past where the
+  // pileup is meaningful.
+  minZoom = 0.6;
+  maxZoom = 1.6;
 
   apply(p: p5): void {
     p.translate(this.x, this.y);
