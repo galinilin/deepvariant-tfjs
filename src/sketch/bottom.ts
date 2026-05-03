@@ -130,6 +130,19 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
   }, container);
 
   function schedulePredict(pos: number, generation: number, key: string): void {
+    // CRITICAL: only reset the timer when the target actually changes.
+    // p.draw runs at 60 Hz; if we reset the 220 ms debounce on every frame,
+    // it never elapses while the tab is foregrounded — predicts only fire
+    // when rAF is throttled (e.g., tab switch). Symptom users hit: have to
+    // alt-tab away and back to see predictions update.
+    if (
+      pendingTarget &&
+      pendingTarget.pos === pos &&
+      pendingTarget.generation === generation &&
+      pendingTarget.candidateKey === key
+    ) {
+      return;
+    }
     pendingTarget = { pos, generation, candidateKey: key };
     if (pendingTimer !== null) window.clearTimeout(pendingTimer);
     pendingTimer = window.setTimeout(() => {
