@@ -98,18 +98,28 @@ export function deriveCandidateOutcome(
     if (read.mapq < MIN_MAPPING_QUALITY) continue;
 
     const base = read.bases[offset];
-    if (base !== '-') {
-      const q = read.qualities[offset] ?? 0;
-      if (q < MIN_BASE_QUALITY) continue;
-    }
+    // DV-canonical: a read whose base at this position is '-' is inside a
+    // deletion run anchored at SOME EARLIER position. It contributes no
+    // allele at this position — skip it from this position's qualifying
+    // count and counts.
+    if (base === '-') continue;
+
+    const q = read.qualities[offset] ?? 0;
+    if (q < MIN_BASE_QUALITY) continue;
 
     qualifyingTotal++;
-    if (base === '-') {
-      delCount++;
-    } else if (base !== refBase) {
+    if (base !== refBase) {
       snvCounts.set(base, (snvCounts.get(base) ?? 0) + 1);
     }
 
+    // Deletion anchored AT this position: the next cell starts a deletion
+    // run. DV's variant.start points to this anchor base (e.g. variant
+    // ref="TA" alt="T" at start=P means anchor=T@P, deleted=A@P+1).
+    if (offset + 1 < read.bases.length && read.bases[offset + 1] === '-') {
+      delCount++;
+    }
+
+    // Insertion anchored AT this position.
     if (read.insertions) {
       for (const ins of read.insertions) {
         if (ins.offset === offset) {
@@ -143,8 +153,12 @@ export function deriveCandidateOutcome(
     return { kind: 'no-alt-evidence', qualifyingReads: qualifyingTotal };
   }
 
+  // On equal counts, prefer indels over SNVs: phantom SNV mismatches near
+  // indels are common alignment artifacts, so a tied SNV vs indel almost
+  // always resolves to the indel as the real allele. Among indels, del
+  // before ins (DV's allele-ordering convention; also "shorter alt first").
   const kindRank = (k: BestAlt['kind']): number =>
-    k === 'snv' ? 0 : k === 'del' ? 1 : 2;
+    k === 'del' ? 0 : k === 'ins' ? 1 : 2;
 
   candidates.sort((a, b) => {
     if (b.count !== a.count) return b.count - a.count;
@@ -240,7 +254,10 @@ export function readSupportsCandidate(
     case 'snv':
       return read.bases[offset] === candidate.altBase;
     case 'del':
-      return read.bases[offset] === '-';
+      // DV-canonical: deletion is anchored at `offset`; the deletion run
+      // starts at offset+1.
+      if (read.bases[offset] === '-') return false;
+      return offset + 1 < read.bases.length && read.bases[offset + 1] === '-';
     case 'ins': {
       if (!read.insertions) return false;
       const target = candidate.altSequence.join('');

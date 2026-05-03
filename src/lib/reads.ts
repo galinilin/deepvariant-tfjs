@@ -194,13 +194,15 @@ function applyScenariosToRead(
         }
         break;
       case 'het_del':
+        // DV-canonical: deletion anchored at the cell BEFORE the gap.
+        // sc.position is the anchor; the deleted run starts at offset+1.
         if (rng() < 0.5) {
-          applyDeletion(read, offset, sc.delLength ?? 1);
+          applyDeletion(read, offset + 1, sc.delLength ?? 1);
         }
         break;
       case 'hom_alt_del':
         if (rng() < 0.95) {
-          applyDeletion(read, offset, sc.delLength ?? 1);
+          applyDeletion(read, offset + 1, sc.delLength ?? 1);
         }
         break;
       case 'het_ins':

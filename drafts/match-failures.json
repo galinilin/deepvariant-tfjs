@@ -1,0 +1,107 @@
+[
+  {
+    "sampleIndex": 25,
+    "level": 1,
+    "variant": "chr20:10009877 A>G idx=[0]",
+    "expected": {
+      "kind": "snv",
+      "alts": [
+        "G"
+      ]
+    },
+    "got": {
+      "kind": "below-fraction",
+      "alt": {
+        "kind": "snv",
+        "altBase": "G"
+      },
+      "count": 4,
+      "qualifyingReads": 37
+    },
+    "detail": "outcome=below-fraction (DV called snv G)"
+  },
+  {
+    "sampleIndex": 41,
+    "level": 1,
+    "variant": "chr20:10004253 A>T idx=[0]",
+    "expected": {
+      "kind": "snv",
+      "alts": [
+        "T"
+      ]
+    },
+    "got": {
+      "kind": "below-fraction",
+      "alt": {
+        "kind": "snv",
+        "altBase": "T"
+      },
+      "count": 6,
+      "qualifyingReads": 54
+    },
+    "detail": "outcome=below-fraction (DV called snv T)"
+  },
+  {
+    "sampleIndex": 62,
+    "level": 1,
+    "variant": "chr20:10002493 A>C idx=[0]",
+    "expected": {
+      "kind": "snv",
+      "alts": [
+        "C"
+      ]
+    },
+    "got": {
+      "kind": "below-fraction",
+      "alt": {
+        "kind": "snv",
+        "altBase": "C"
+      },
+      "count": 4,
+      "qualifyingReads": 36
+    },
+    "detail": "outcome=below-fraction (DV called snv C)"
+  },
+  {
+    "sampleIndex": 73,
+    "level": 1,
+    "variant": "chr20:10008717 AT>A idx=[0]",
+    "expected": {
+      "kind": "del",
+      "alts": [
+        "A"
+      ]
+    },
+    "got": {
+      "kind": "below-count",
+      "alt": {
+        "kind": "del"
+      },
+      "count": 1,
+      "qualifyingReads": 22
+    },
+    "detail": "outcome=below-count (DV called del A)"
+  },
+  {
+    "sampleIndex": 75,
+    "level": 1,
+    "variant": "chr20:10008750 T>TAA idx=[0]",
+    "expected": {
+      "kind": "ins",
+      "alts": [
+        "TAA"
+      ]
+    },
+    "got": {
+      "kind": "accepted",
+      "info": {
+        "kind": "snv",
+        "refBase": "T",
+        "altBase": "A",
+        "supportingReads": 3,
+        "qualifyingReads": 24
+      }
+    },
+    "detail": "our pick snv:A not in DV alts ins:AA"
+  }
+]
