@@ -59,6 +59,27 @@
         color: #fff;
         border-color: #3a3a3a;
       }
+      .predict-anyway-btn {
+        position: fixed;
+        bottom: calc(34vh / 2);
+        left: 50%;
+        transform: translate(-50%, 50%);
+        padding: 8px 16px;
+        background: #0a0a0a;
+        color: #ededed;
+        border: 1px solid #3a3a3a;
+        font-family: 'Inconsolata', ui-monospace, Menlo, monospace;
+        font-size: 13px;
+        letter-spacing: 0.06em;
+        cursor: pointer;
+        user-select: none;
+        z-index: 20;
+        transition: border-color 0.15s, color 0.15s;
+      }
+      .predict-anyway-btn:hover {
+        color: #ffdc6e;
+        border-color: #ffdc6e;
+      }
       .debug-modal {
         position: fixed;
         top: 16px;
@@ -165,6 +186,7 @@
     </div>
     <div id="read-tooltip" class="tooltip"></div>
     <div id="debug-modal" class="debug-modal" style="display:none"></div>
+    <button id="predict-anyway" class="predict-anyway-btn" type="button" style="display:none">Predict anyway</button>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

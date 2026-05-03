@@ -2,11 +2,15 @@ import p5 from 'p5';
 import { sandboxState } from '../lib/sandbox-state';
 import { encodePileup } from '../lib/pileup-encoder';
 import { DeepVariantModel, type Genotype } from '../lib/DeepVariantModel';
-import { formatAlt } from '../lib/candidate';
+import { formatAlt, forceCandidateAt, type CandidateInfo } from '../lib/candidate';
 import { recordPrediction } from '../lib/debug-telemetry';
 
 export interface BottomHandle {
   destroy: () => void;
+  /** Force a prediction at the current predict column even when our
+   * threshold-aware engine rejects the position. Wired to the
+   * "Predict anyway" button in the prediction panel. */
+  forcePredictNow: () => void;
 }
 
 const LABEL_COLOR: [number, number, number] = [210, 210, 210];
@@ -54,17 +58,45 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
   let pendingTimer: number | null = null;
   let pendingTarget: { pos: number; generation: number; candidateKey: string } | null = null;
 
-  const candidateKey = (): string => {
-    const c = sandboxState.candidate;
+  /**
+   * User-clicked "Predict anyway" override. When set, it carries a forced
+   * candidate for a specific (pos, generation). The override is consumed
+   * lazily by p.draw and gets cleared whenever the user navigates to a
+   * different position or generation, so the button must be re-clicked at
+   * each new position.
+   */
+  let forcedOverride: { pos: number; generation: number; candidate: CandidateInfo } | null = null;
+
+  const stableCandidateKey = (c: CandidateInfo | null, forced: boolean): string => {
     if (!c) return 'null';
+    const prefix = forced ? 'forced:' : '';
     switch (c.kind) {
       case 'snv':
-        return `snv:${c.refBase}>${c.altBase}`;
+        return `${prefix}snv:${c.refBase}>${c.altBase}`;
       case 'del':
-        return `del:${c.refBase}`;
+        return `${prefix}del:${c.refBase}`;
       case 'ins':
-        return `ins:${c.refBase}>${c.altSequence.join('')}`;
+        return `${prefix}ins:${c.refBase}>${c.altSequence.join('')}`;
     }
+  };
+
+  /**
+   * Resolve the candidate the bottom canvas should predict on for the
+   * current frame. Real candidate (from sandboxState) wins; otherwise the
+   * forcedOverride (if it matches the current pos+generation); otherwise
+   * null. Returns isForced flag so the UI can mark the prediction as a
+   * synthetic override.
+   */
+  const effectiveCandidate = (): { c: CandidateInfo | null; forced: boolean } => {
+    if (sandboxState.candidate) return { c: sandboxState.candidate, forced: false };
+    if (
+      forcedOverride &&
+      forcedOverride.pos === sandboxState.predictPos &&
+      forcedOverride.generation === sandboxState.readsGeneration
+    ) {
+      return { c: forcedOverride.candidate, forced: true };
+    }
+    return { c: null, forced: false };
   };
 
   const size = () => ({
@@ -100,15 +132,26 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
     p.draw = () => {
       p.background(0);
 
-      const c = sandboxState.candidate;
+      const { c, forced } = effectiveCandidate();
       const reads = sandboxState.reads;
       const reference = sandboxState.reference;
       const pos = sandboxState.predictPos;
       const gen = sandboxState.readsGeneration;
 
+      // Drop a stale forcedOverride if the user moved to a new position or
+      // re-rolled the world. Without this the override would silently leak
+      // across positions because effectiveCandidate's pos/gen check would
+      // simply ignore it.
+      if (
+        forcedOverride &&
+        (forcedOverride.pos !== pos || forcedOverride.generation !== gen)
+      ) {
+        forcedOverride = null;
+      }
+
       // Schedule a predict if state changed and we have everything we need.
       if (model && c && reads && reference && pos !== null) {
-        const key = candidateKey();
+        const key = stableCandidateKey(c, forced);
         const stale =
           !cached ||
           cached.pos !== pos ||
@@ -119,6 +162,11 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
         }
       }
 
+      // Toggle the "Predict anyway" button visibility per frame. The button
+      // is an HTML element managed in index.html; bottom-canvas owns its
+      // show/hide based on the live state.
+      updatePredictAnywayButton({ haveCandidate: !!c, reads, pos });
+
       const innerW = p.width - MARGIN * 2 - GAP;
       const innerH = p.height - MARGIN * 2;
       const leftW = Math.round(innerW * 0.72);
@@ -128,6 +176,21 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
       drawPredictionPanel(p, MARGIN + leftW + GAP, MARGIN, rightW, innerH);
     };
   }, container);
+
+  /** Hide / show the "Predict anyway" button. Visible iff there's no
+   * candidate (real OR forced) at the current position but we have reads
+   * + a position to act on. */
+  function updatePredictAnywayButton(state: {
+    haveCandidate: boolean;
+    reads: typeof sandboxState.reads;
+    pos: number | null;
+  }): void {
+    const btn = document.getElementById('predict-anyway') as HTMLButtonElement | null;
+    if (!btn) return;
+    const show =
+      !state.haveCandidate && state.reads !== null && state.pos !== null;
+    btn.style.display = show ? '' : 'none';
+  }
 
   function schedulePredict(pos: number, generation: number, key: string): void {
     // CRITICAL: only reset the timer when the target actually changes.
@@ -158,7 +221,7 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
 
     // Re-check live state under the same target to avoid running on
     // stale snapshots if something changed during the debounce.
-    const c = sandboxState.candidate;
+    const { c, forced } = effectiveCandidate();
     const reads = sandboxState.reads;
     const reference = sandboxState.reference;
     const pos = sandboxState.predictPos;
@@ -168,7 +231,7 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
       !reference ||
       pos !== target.pos ||
       sandboxState.readsGeneration !== target.generation ||
-      candidateKey() !== target.candidateKey
+      stableCandidateKey(c, forced) !== target.candidateKey
     ) {
       // State changed — let the next p.draw schedule a fresh predict.
       return;
@@ -221,9 +284,11 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
   ): void {
     drawPanelChrome(p, x, y, w, h, 'Pileup Image');
 
-    const c = sandboxState.candidate;
+    const { c, forced } = effectiveCandidate();
     if (!c) {
-      drawCenteredText(p, x, y, w, h, 'no candidate', PLACEHOLDER_COLOR, 13);
+      // Empty placeholder — the "Predict anyway" HTML button overlays
+      // this area when reads are available.
+      drawCenteredText(p, x, y, w, h, '', PLACEHOLDER_COLOR, 13);
       return;
     }
 
@@ -241,7 +306,7 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
       return;
     }
 
-    if (!cached || cached.candidateKey !== candidateKey()) {
+    if (!cached || cached.candidateKey !== stableCandidateKey(c, forced)) {
       drawCenteredText(
         p,
         x,
@@ -293,9 +358,11 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
   ): void {
     drawPanelChrome(p, x, y, w, h, 'Prediction');
 
-    const c = sandboxState.candidate;
+    const { c, forced } = effectiveCandidate();
     if (!c) {
-      drawCenteredText(p, x, y, w, h, 'no candidate', PLACEHOLDER_COLOR, 13);
+      // Empty placeholder — the "Predict anyway" HTML button overlays
+      // this area when reads are available.
+      drawCenteredText(p, x, y, w, h, '', PLACEHOLDER_COLOR, 13);
       return;
     }
 
@@ -304,13 +371,20 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
     const innerRight = x + w - 12;
     const innerW = innerRight - innerLeft;
 
-    // Variant header
+    // Variant header. Forced predictions get an explicit "(forced)" tag so
+    // the user knows the engine rejected this position and the prediction
+    // is from a fabricated/best-effort candidate.
     const altLabel = formatAlt(c);
     p.noStroke();
     p.fill(LABEL_COLOR[0], LABEL_COLOR[1], LABEL_COLOR[2]);
     p.textSize(13);
     p.textAlign(p.LEFT, p.TOP);
     p.text(`${c.refBase}→${altLabel}`, innerLeft, cursorY);
+    if (forced) {
+      p.fill(220, 170, 90);
+      p.textSize(10);
+      p.text('(forced)', innerLeft + 60, cursorY + 3);
+    }
     p.fill(MUTED_COLOR[0], MUTED_COLOR[1], MUTED_COLOR[2]);
     p.textSize(11);
     p.text(
@@ -334,7 +408,7 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
       return;
     }
 
-    if (!cached || cached.candidateKey !== candidateKey()) {
+    if (!cached || cached.candidateKey !== stableCandidateKey(c, forced)) {
       const msg = model
         ? predicting || pendingTimer !== null
           ? 'predicting…'
@@ -451,11 +525,27 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
     return out;
   }
 
+  function forcePredictNow(): void {
+    const reads = sandboxState.reads;
+    const reference = sandboxState.reference;
+    const pos = sandboxState.predictPos;
+    if (!reads || !reference || pos === null) return;
+    if (sandboxState.candidate) return; // a real candidate already wins
+    const forced = forceCandidateAt(reads, reference, pos);
+    if (!forced) return; // no qualifying reads — nothing to predict on
+    forcedOverride = {
+      pos,
+      generation: sandboxState.readsGeneration,
+      candidate: forced,
+    };
+  }
+
   return {
     destroy: () => {
       if (pendingTimer !== null) window.clearTimeout(pendingTimer);
       if (model) model.dispose();
       instance.remove();
     },
+    forcePredictNow,
   };
 }
