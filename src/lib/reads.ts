@@ -28,14 +28,19 @@ export interface Read {
   insertions?: Insertion[];
 }
 
-// v3.2: bumped read count + scenario coverage floor + visible packed rows
-// to land synthetic input inside DV's WGS training distribution (~30× depth,
-// ~95-row pileup at the candidate). Old values were ~5× depth, biasing
-// every prediction toward hom_alt regardless of scenario.
+// v3.2/v3.3: synthetic params land inside DV's WGS training distribution
+// (~30× depth, near-full pileup at scenarios).
+//
+// MAX_PACKED_ROWS sets the *visual* row cap (cache height + hit-test).
+// The encoder caps at MAX_READ_ROWS = 95 (dv-channels.ts). With 250
+// reads on a 1500-bp ref + scenario floor 30, IGV-pack depth at
+// scenarios reaches ~35 rows. Setting the visual cap above that means
+// the user sees every read the encoder feeds the model. Camera
+// auto-fit absorbs the taller canvas.
 export const DEFAULT_READ_COUNT = 250;
 export const READ_MIN_LENGTH = 90;
 export const READ_MAX_LENGTH = 130;
-export const MAX_PACKED_ROWS = 20;
+export const MAX_PACKED_ROWS = 40;
 
 export function makeRng(seed: number): () => number {
   let x = seed | 0;
