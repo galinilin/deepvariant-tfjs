@@ -1,6 +1,8 @@
 import type { Base } from './palette';
 
-export const DEFAULT_REFERENCE_LENGTH = 900;
+// v3.2: bumped to 1500 bp so 3 widely-spaced scenarios (MIN_SPACING=350)
+// fit comfortably and the user has room to scrub between variants.
+export const DEFAULT_REFERENCE_LENGTH = 1500;
 export const WINDOW_LENGTH = 221;
 
 const BASES: Base[] = ['A', 'C', 'G', 'T'];
