@@ -59,6 +59,52 @@
         color: #fff;
         border-color: #3a3a3a;
       }
+      .debug-modal {
+        position: fixed;
+        top: 16px;
+        right: 16px;
+        z-index: 50;
+        max-width: 460px;
+        background: rgba(8, 8, 10, 0.94);
+        border: 1px solid #2a2a2a;
+        color: #d8d8d8;
+        font-family: 'Inconsolata', ui-monospace, Menlo, monospace;
+        font-size: 12px;
+        line-height: 1.55;
+        padding: 14px 16px;
+        max-height: 80vh;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        letter-spacing: 0.02em;
+      }
+      .debug-modal h3 {
+        margin: 0 0 6px 0;
+        font-size: 11px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: #888;
+        font-weight: 600;
+      }
+      .debug-modal .row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .debug-modal .row .k { color: #888; }
+      .debug-modal .row .v { color: #ededed; }
+      .debug-modal .section {
+        margin-top: 10px;
+        padding-top: 8px;
+        border-top: 1px solid #232323;
+      }
+      .debug-modal .section:first-of-type {
+        margin-top: 0;
+        padding-top: 0;
+        border-top: none;
+      }
+      .debug-modal .ok { color: #c0e090; }
+      .debug-modal .warn { color: #f0c060; }
+      .debug-modal .err { color: #e07060; }
       .tooltip {
         position: fixed;
         background: #0a0a0a;
@@ -111,10 +157,14 @@
     <div id="sketch-top"></div>
     <div id="sketch-bottom"></div>
     <div class="corner-buttons">
-      <button id="randomize" class="reset-btn" type="button">Randomize</button>
+      <button id="prev-cand" class="reset-btn" type="button" title="Previous candidate (←)">◀ Prev</button>
+      <button id="next-cand" class="reset-btn" type="button" title="Next candidate (→)">Next ▶</button>
+      <button id="randomize" class="reset-btn" type="button" title="Random candidate (R)">Randomize</button>
       <button id="reset-view" class="reset-btn" type="button">Reset view</button>
+      <button id="toggle-debug" class="reset-btn" type="button" title="Toggle debug modal (D)">Debug</button>
     </div>
     <div id="read-tooltip" class="tooltip"></div>
+    <div id="debug-modal" class="debug-modal" style="display:none"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

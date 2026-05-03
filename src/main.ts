@@ -1,8 +1,10 @@
-import { mountTopSketch, type HoverInfo } from './sketch/top';
+import { mountTopSketch, type HoverInfo, type SketchHandle } from './sketch/top';
 import { mountBottomSketch } from './sketch/bottom';
 import { formatAlt, type CandidateOutcome } from './lib/candidate';
 import { encodePileup, validateEncodedTensor } from './lib/pileup-encoder';
 import { sandboxState } from './lib/sandbox-state';
+import { buildWorld } from './lib/world-builder';
+import { mountDebugModal } from './sketch/debug-modal';
 
 // Debug helpers exposed on window for ad-hoc inspection from the browser
 // console. Run e.g. `dvDebug.predictColumnStats()` to see what the
@@ -72,14 +74,60 @@ const topEl = document.getElementById('sketch-top');
 const bottomEl = document.getElementById('sketch-bottom');
 if (!topEl || !bottomEl) throw new Error('missing sketch containers');
 
-const top = mountTopSketch(topEl);
-mountBottomSketch(bottomEl);
+// Show a loading state until the real-BAM fixture bundle arrives. The
+// synthetic mode is still available behind ?world=synthetic for fallback
+// + comparison.
+const params = new URLSearchParams(window.location.search);
+const worldKind = params.get('world') === 'synthetic' ? 'synthetic' : 'real-bam';
+showLoading(topEl, worldKind === 'real-bam' ? 'Loading chr20 reads…' : 'Generating…');
 
-const resetBtn = document.getElementById('reset-view');
-resetBtn?.addEventListener('click', () => top.resetView());
+let top: SketchHandle | null = null;
+mountBottomSketch(bottomEl); // bottom canvas mounts immediately; it'll
+                              // display "no candidate" until top is ready
 
-const randomizeBtn = document.getElementById('randomize');
-randomizeBtn?.addEventListener('click', () => top.randomize());
+(async () => {
+  const world =
+    worldKind === 'synthetic'
+      ? await buildWorld({ kind: 'synthetic', seed: 42 })
+      : await buildWorld({ kind: 'real-bam' });
+  topEl.innerHTML = ''; // clear loading message
+  top = mountTopSketch(topEl, world);
+  attachUiHandlers(top);
+})().catch((err) => {
+  console.error('failed to load world:', err);
+  showLoading(topEl, `error: ${err instanceof Error ? err.message : 'load failed'}`);
+});
+
+mountDebugModal();
+
+function showLoading(el: HTMLElement, msg: string): void {
+  el.innerHTML = `<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#aaa;font-family:Inconsolata,monospace;font-size:14px;letter-spacing:0.05em">${msg}</div>`;
+}
+
+function attachUiHandlers(handle: SketchHandle): void {
+  const resetBtn = document.getElementById('reset-view');
+  resetBtn?.addEventListener('click', () => handle.resetView());
+
+  const randomizeBtn = document.getElementById('randomize');
+  randomizeBtn?.addEventListener('click', () => handle.randomize());
+
+  const prevCandBtn = document.getElementById('prev-cand');
+  prevCandBtn?.addEventListener('click', () => handle.prevCandidate());
+
+  const nextCandBtn = document.getElementById('next-cand');
+  nextCandBtn?.addEventListener('click', () => handle.nextCandidate());
+
+  // Keyboard navigation: ←/→ for candidate stepping, 'r' for randomize.
+  // Skip when the user is typing in an input.
+  window.addEventListener('keydown', (ev) => {
+    if (ev.target instanceof HTMLInputElement || ev.target instanceof HTMLTextAreaElement) {
+      return;
+    }
+    if (ev.key === 'ArrowLeft') handle.prevCandidate();
+    else if (ev.key === 'ArrowRight') handle.nextCandidate();
+    else if (ev.key === 'r' || ev.key === 'R') handle.randomize();
+  });
+}
 
 const tooltip = document.getElementById('read-tooltip');
 let isDragging = false;
@@ -96,6 +144,7 @@ if (tooltip) {
     const rect = topEl.getBoundingClientRect();
     const sx = ev.clientX - rect.left;
     const sy = ev.clientY - rect.top;
+    if (!top) return;
     const info = top.hoverInfo(sx, sy);
     if (!info) {
       tooltip.style.display = 'none';

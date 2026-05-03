@@ -10,8 +10,9 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "sync-models": "bash scripts/sync-models.sh",
-    "predeploy": "bash scripts/sync-models.sh uint8-only && npm run build",
-    "deploy": "gh-pages -d dist --dotfiles --branch gh-pages --message 'deploy: deepvariant-tfjs site'"
+    "predeploy": "bash scripts/sync-models.sh uint8-only && npm run extract-browser-region && npm run build",
+    "deploy": "gh-pages -d dist --dotfiles --branch gh-pages --message 'deploy: deepvariant-tfjs site'",
+    "extract-browser-region": "bash -c 'cd /root/dv-tfjs && uv run python /root/deepvariant-tf-js/scripts/extract_browser_region.py'"
   },
   "dependencies": {
     "@tensorflow/tfjs": "4.22.0",

@@ -3,6 +3,7 @@ import { sandboxState } from '../lib/sandbox-state';
 import { encodePileup } from '../lib/pileup-encoder';
 import { DeepVariantModel, type Genotype } from '../lib/DeepVariantModel';
 import { formatAlt } from '../lib/candidate';
+import { recordPrediction } from '../lib/debug-telemetry';
 
 export interface BottomHandle {
   destroy: () => void;
@@ -173,6 +174,7 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
     }
 
     predicting = true;
+    const t0 = performance.now();
     try {
       const result = await model.predict(modelInput);
       const probs: [number, number, number] = [
@@ -180,6 +182,7 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
         result.probs.het,
         result.probs.hom_alt,
       ];
+      recordPrediction(probs, result.argmax, performance.now() - t0);
       const channelImages = buildChannelImages(instance, tensor);
       cached = {
         pos: target.pos,

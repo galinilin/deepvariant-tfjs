@@ -21,14 +21,13 @@ import {
   paintReadsBases,
 } from '../world/regions/reads';
 import {
-  DEFAULT_REFERENCE_LENGTH,
   WINDOW_LENGTH,
-  buildReference,
   clampWindowStart,
   defaultWindowStart,
 } from '../lib/reference';
-import { buildReads, makeRng, MAX_PACKED_ROWS, type Read } from '../lib/reads';
-import { placeScenarios, type Scenario } from '../lib/scenarios';
+import { MAX_PACKED_ROWS, type Read } from '../lib/reads';
+import type { Scenario } from '../lib/scenarios';
+import type { World } from '../lib/world-builder';
 import {
   deriveCandidateOutcome,
   formatAlt,
@@ -67,16 +66,27 @@ export interface SketchHandle {
   resetView: () => void;
   randomize: () => void;
   hoverInfo: (sx: number, sy: number) => HoverInfo | null;
+  /** Snap the predict window to the next/previous DV-emitted candidate
+   * (or 'het'/'het_del' synthetic scenario). Returns the new index, or
+   * -1 if no scenarios. */
+  nextCandidate: () => number;
+  prevCandidate: () => number;
+  /** Replace the current world (reference + reads + scenarios). Used by
+   * the synthetic Randomize button to regenerate; real-bam mode keeps
+   * the loaded fixture for the session. */
+  setWorld: (world: World) => void;
   destroy: () => void;
 }
 
 const REF_GAP = 80;
 const READS_GAP = 18;
-const INITIAL_SEED = 42;
 
-export function mountTopSketch(container: HTMLElement): SketchHandle {
+export function mountTopSketch(container: HTMLElement, initialWorld: World): SketchHandle {
   let resetFn: () => void = () => {};
   let randomizeFn: () => void = () => {};
+  let nextCandidateFn: () => number = () => -1;
+  let prevCandidateFn: () => number = () => -1;
+  let setWorldFn: (w: World) => void = () => {};
   let camRef: Camera | null = null;
   let readsRef: Read[] = [];
   let referenceRef: Base[] = [];
@@ -92,23 +102,13 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
     const cam = new Camera();
     camRef = cam;
 
-    let reference: Base[] = [];
-    let scenarios: Scenario[] = [];
-    let reads: Read[] = [];
+    let reference: Base[] = initialWorld.reference;
+    let scenarios: Scenario[] = initialWorld.scenarios;
+    let reads: Read[] = initialWorld.reads;
+    let activeCandidateIdx = 0;
     let windowStart = 0;
-
-    const generateWorld = (seed: number) => {
-      const rng = makeRng(seed);
-      reference = buildReference(DEFAULT_REFERENCE_LENGTH, seed);
-      scenarios = placeScenarios(reference, rng);
-      reads = buildReads(reference, scenarios, rng);
-      referenceRef = reference;
-      readsRef = reads;
-    };
-
-    generateWorld(INITIAL_SEED);
-    windowStart = defaultWindowStart(reference.length);
-    windowStartRef.value = windowStart;
+    referenceRef = reference;
+    readsRef = reads;
 
     const refWidth = REF_COUNT * CELL_W;
     const fullPileupWidth = reference.length * CELL_W;
@@ -175,8 +175,15 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
       const ch = totalHeight * cam.zoom;
       cam.x = (w - cw) / 2;
       cam.y = (h - ch) / 2;
-      windowStart = defaultWindowStart(reference.length);
-      windowStartRef.value = windowStart;
+      // On first paint, snap the window to the first candidate so the user
+      // immediately sees a real DV-emitted variant. Falls back to centered
+      // window if the world has no scenarios.
+      if (scenarios.length > 0) {
+        snapToCandidate(0);
+      } else {
+        windowStart = defaultWindowStart(reference.length);
+        windowStartRef.value = windowStart;
+      }
     };
 
     resetFn = () => initializeView();
@@ -191,30 +198,69 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
       paintReadsBases(readsCache, reads, reference, CELL_W);
     };
 
-    const randomize = () => {
-      const seed = Math.floor(Math.random() * 0x7fffffff) || 1;
-      generateWorld(seed);
+    const snapToCandidate = (idx: number) => {
+      if (scenarios.length === 0) return;
+      const wrapped = ((idx % scenarios.length) + scenarios.length) % scenarios.length;
+      activeCandidateIdx = wrapped;
+      const pick = scenarios[wrapped];
+      windowStart = clampWindowStart(
+        pick.position - Math.floor(WINDOW_LENGTH / 2),
+        reference.length,
+      );
+      windowStartRef.value = windowStart;
+    };
 
+    const randomize = () => {
+      // In real-bam mode the world is fixed for the session — the
+      // intuitive "Randomize" gesture becomes "jump to a random
+      // candidate in the loaded region." Synthetic-mode worlds get
+      // regenerated via setWorld() from main.ts when needed.
+      if (scenarios.length === 0) return;
+      const idx = Math.floor(Math.random() * scenarios.length);
+      snapToCandidate(idx);
+      sandboxState.readsGeneration += 1;
+    };
+
+    const nextCandidate = (): number => {
+      if (scenarios.length === 0) return -1;
+      snapToCandidate(activeCandidateIdx + 1);
+      sandboxState.readsGeneration += 1;
+      return activeCandidateIdx;
+    };
+
+    const prevCandidate = (): number => {
+      if (scenarios.length === 0) return -1;
+      snapToCandidate(activeCandidateIdx - 1);
+      sandboxState.readsGeneration += 1;
+      return activeCandidateIdx;
+    };
+
+    const setWorld = (w: World) => {
+      reference = w.reference;
+      scenarios = w.scenarios;
+      reads = w.reads;
+      referenceRef = reference;
+      readsRef = reads;
+      activeCandidateIdx = 0;
+      // NOTE: ref-cache size is fixed at p5 setup based on reference.length,
+      // so cross-mode hot-swap (synthetic 1500 ↔ real-bam 5000) needs a
+      // page reload. Same-mode swaps (synthetic seed change) are safe
+      // because reference length is stable.
       if (scenarios.length > 0) {
-        const pick = scenarios[Math.floor(Math.random() * scenarios.length)];
-        windowStart = clampWindowStart(
-          pick.position - Math.floor(WINDOW_LENGTH / 2),
-          reference.length,
-        );
+        snapToCandidate(0);
       } else {
         windowStart = defaultWindowStart(reference.length);
+        windowStartRef.value = windowStart;
       }
-      windowStartRef.value = windowStart;
-
       refCache?.invalidate();
       buildReadsCache();
-
-      // Bump the generation counter so the bottom canvas knows to
-      // invalidate any cached prediction tied to the previous reads set.
       sandboxState.readsGeneration += 1;
     };
 
     randomizeFn = randomize;
+    nextCandidateFn = nextCandidate;
+    prevCandidateFn = prevCandidate;
+    setWorldFn = setWorld;
 
     const drawWindowFunnel = () => {
       const winLeft =
@@ -510,6 +556,9 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
     resetView: () => resetFn(),
     randomize: () => randomizeFn(),
     hoverInfo,
+    nextCandidate: () => nextCandidateFn(),
+    prevCandidate: () => prevCandidateFn(),
+    setWorld: (w: World) => setWorldFn(w),
     destroy: () => instance.remove(),
   };
 }
