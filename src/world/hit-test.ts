@@ -1,13 +1,25 @@
 import type { Read } from '../lib/reads';
-import type { Cell } from '../lib/palette';
+import type { Base, Cell } from '../lib/palette';
 
-export interface ReadHit {
-  read: Read;
-  absCol: number;
-  cellIdx: number;
-  base: Cell;
-  quality: number;
-}
+export type ReadHit =
+  | {
+      kind: 'cell';
+      read: Read;
+      absCol: number;
+      cellIdx: number;
+      base: Cell;
+      quality: number;
+    }
+  | {
+      kind: 'insertion';
+      read: Read;
+      absCol: number;
+      offset: number;
+      sequence: Base[];
+      qualities: Uint8Array;
+    };
+
+const INSERTION_TICK_HIT_HALF = 3; // ±3 px around the column boundary
 
 /**
  * Resolve a world-coordinate point to a (read, cell) hit, if the point lies
@@ -19,6 +31,9 @@ export interface ReadHit {
  * range into the visible region. So world coords have to be translated back
  * into absolute genomic coords (cache coord space) before comparing against
  * read positions.
+ *
+ * Insertion ticks (between-column events) are tested first: hovering on a
+ * tick returns a `'insertion'` hit, otherwise the standard `'cell'` hit.
  */
 export function hitTestReads(
   wx: number,
@@ -48,10 +63,27 @@ export function hitTestReads(
     const endX = (read.startCol + read.bases.length) * cellW;
     if (absX < startX || absX >= endX) continue;
 
+    if (read.insertions) {
+      for (const ins of read.insertions) {
+        const tickCenterX = (read.startCol + ins.offset + 1) * cellW;
+        if (Math.abs(absX - tickCenterX) <= INSERTION_TICK_HIT_HALF) {
+          return {
+            kind: 'insertion',
+            read,
+            absCol: read.startCol + ins.offset,
+            offset: ins.offset,
+            sequence: ins.bases,
+            qualities: ins.qualities,
+          };
+        }
+      }
+    }
+
     const cellIdx = Math.floor((absX - startX) / cellW);
     if (cellIdx < 0 || cellIdx >= read.bases.length) continue;
 
     return {
+      kind: 'cell',
       read,
       absCol: read.startCol + cellIdx,
       cellIdx,

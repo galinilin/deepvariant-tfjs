@@ -16,6 +16,12 @@ const FORWARD_STRAND_COLOR: [number, number, number] = [105, 112, 130];
 const REVERSE_STRAND_COLOR: [number, number, number] = [130, 112, 105];
 const DELETION_COLOR: [number, number, number] = [165, 165, 165];
 const DELETION_HEIGHT = 2;
+const INSERTION_COLOR_RGB: [number, number, number] = [155, 110, 200];
+const INSERTION_LABEL_RGB: [number, number, number] = [195, 145, 230];
+const INSERTION_TICK_WIDTH = 3;
+const INSERTION_TICK_OVERHANG = 2;
+const INSERTION_LABEL_FONT = '600 8px Inconsolata, ui-monospace, Menlo, monospace';
+const INSERTION_LABEL_GAP = 2;
 
 export interface ReadsState {
   origin: { x: number; y: number };
@@ -117,6 +123,38 @@ export function paintReadsBases(
         ctx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},${letterAlpha.toFixed(3)})`;
         ctx.fillText(base, cellCenterX, rowYCenter);
       }
+    }
+
+    // Insertion ticks: drawn at the boundary between bases[offset] and
+    // bases[offset+1], straddling the column edge. Alpha tracks mapq so the
+    // visual weight matches the read body. A small "+N" length label sits
+    // just above the tick (IGV convention) so length is visible at-a-glance.
+    const insertions = read.insertions;
+    if (insertions) {
+      const tickAlpha = Math.min(1, bodyAlpha + 0.45);
+      const insertionFill = `rgba(${INSERTION_COLOR_RGB[0]},${INSERTION_COLOR_RGB[1]},${INSERTION_COLOR_RGB[2]},${tickAlpha.toFixed(3)})`;
+      const tickY = bodyY - INSERTION_TICK_OVERHANG;
+      const tickH = READ_BODY_HEIGHT + INSERTION_TICK_OVERHANG * 2;
+      ctx.fillStyle = insertionFill;
+      for (const ins of insertions) {
+        const tickCenterX = (read.startCol + ins.offset + 1) * cellW;
+        ctx.fillRect(
+          tickCenterX - INSERTION_TICK_WIDTH / 2,
+          tickY,
+          INSERTION_TICK_WIDTH,
+          tickH,
+        );
+      }
+      ctx.font = INSERTION_LABEL_FONT;
+      ctx.textAlign = 'left';
+      ctx.fillStyle = `rgba(${INSERTION_LABEL_RGB[0]},${INSERTION_LABEL_RGB[1]},${INSERTION_LABEL_RGB[2]},${tickAlpha.toFixed(3)})`;
+      const labelX0Offset =
+        INSERTION_TICK_WIDTH / 2 + INSERTION_LABEL_GAP;
+      for (const ins of insertions) {
+        const tickCenterX = (read.startCol + ins.offset + 1) * cellW;
+        ctx.fillText(`+${ins.bases.length}`, tickCenterX + labelX0Offset, rowYCenter);
+      }
+      ctx.textAlign = 'center';
     }
   }
 }

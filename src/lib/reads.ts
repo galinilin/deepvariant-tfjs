@@ -4,6 +4,18 @@ import { pickAltBase } from './scenarios';
 
 export type Strand = 'forward' | 'reverse';
 
+/**
+ * A read insertion: bases that exist in the read but not in the reference.
+ * Anchored to a base position in `read.bases` — sits *after* `bases[offset]`,
+ * between that cell and `bases[offset+1]`. The reference position carrying
+ * the anchor is `read.startCol + offset`.
+ */
+export interface Insertion {
+  offset: number;
+  bases: Base[];
+  qualities: Uint8Array;
+}
+
 export interface Read {
   id: string;
   startCol: number;
@@ -13,6 +25,7 @@ export interface Read {
   mapq: number;
   insertSize: number;
   row: number;
+  insertions?: Insertion[];
 }
 
 export const DEFAULT_READ_COUNT = 40;
@@ -190,6 +203,16 @@ function applyScenariosToRead(
           applyDeletion(read, offset, sc.delLength ?? 1);
         }
         break;
+      case 'het_ins':
+        if (rng() < 0.5) {
+          applyInsertion(read, offset, sc.insLength ?? 1, rng);
+        }
+        break;
+      case 'hom_alt_ins':
+        if (rng() < 0.95) {
+          applyInsertion(read, offset, sc.insLength ?? 1, rng);
+        }
+        break;
       case 'noisy_burst':
         if (rng() < 0.25) {
           const refSafe = safeBase(reference[sc.position]);
@@ -246,6 +269,32 @@ function applyDeletion(read: Read, offset: number, length: number): void {
   for (let i = 0; i < length; i++) {
     if (offset + i < read.bases.length) {
       read.bases[offset + i] = '-';
+      read.qualities[offset + i] = 0; // no base in BAM QUAL at deleted positions
     }
   }
+}
+
+const INS_BASES: Base[] = ['A', 'C', 'G', 'T'];
+
+function applyInsertion(
+  read: Read,
+  offset: number,
+  length: number,
+  rng: () => number,
+): void {
+  // Anchor must be a valid base AND have a following cell so the tick sits
+  // strictly between two cells (keeps it inside the read body and inside the
+  // hit-test bounds).
+  if (offset < 0 || offset >= read.bases.length - 1) return;
+  if (read.bases[offset] === '-') return;
+  const bases: Base[] = new Array(length);
+  const qualities = new Uint8Array(length);
+  for (let i = 0; i < length; i++) {
+    bases[i] = INS_BASES[Math.floor(rng() * 4)];
+    qualities[i] = 28 + Math.floor(rng() * 11); // Q28..Q38
+  }
+  const ins: Insertion = { offset, bases, qualities };
+  const list = (read.insertions ??= []);
+  list.push(ins);
+  list.sort((a, b) => a.offset - b.offset);
 }
