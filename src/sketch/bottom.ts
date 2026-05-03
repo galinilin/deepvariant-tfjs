@@ -163,9 +163,18 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
     const tensor = encodePileup(reads, reference, pos, c);
     if (!tensor) return;
 
+    // DV preprocessing: the network was trained on (uint8_pixel - 128) / 128
+    // in [-1, 1]. Source: dv-tfjs/scripts/convert.py + deepvariant/dv_utils.py.
+    // We render strips from the pre-preprocessed tensor (raw [0, 254]) but
+    // feed a normalized copy to the model.
+    const modelInput = new Float32Array(tensor.length);
+    for (let i = 0; i < tensor.length; i++) {
+      modelInput[i] = (tensor[i] - 128) / 128;
+    }
+
     predicting = true;
     try {
-      const result = await model.predict(tensor);
+      const result = await model.predict(modelInput);
       const probs: [number, number, number] = [
         result.probs.hom_ref,
         result.probs.het,
