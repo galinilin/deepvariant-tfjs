@@ -28,10 +28,14 @@ export interface Read {
   insertions?: Insertion[];
 }
 
-export const DEFAULT_READ_COUNT = 40;
+// v3.2: bumped read count + scenario coverage floor + visible packed rows
+// to land synthetic input inside DV's WGS training distribution (~30× depth,
+// ~95-row pileup at the candidate). Old values were ~5× depth, biasing
+// every prediction toward hom_alt regardless of scenario.
+export const DEFAULT_READ_COUNT = 250;
 export const READ_MIN_LENGTH = 90;
 export const READ_MAX_LENGTH = 130;
-export const MAX_PACKED_ROWS = 14;
+export const MAX_PACKED_ROWS = 20;
 
 export function makeRng(seed: number): () => number {
   let x = seed | 0;
@@ -41,7 +45,10 @@ export function makeRng(seed: number): () => number {
   };
 }
 
-const SCENARIO_COVERAGE_FLOOR = 4;
+// Each scenario gets at least this many reads guaranteed to span its
+// position. 30 matches DV's WGS ~30× training depth — predictions on
+// scenarios end up in DV's calibrated softmax range.
+const SCENARIO_COVERAGE_FLOOR = 30;
 
 export function buildReads(
   reference: Base[],
