@@ -74,11 +74,13 @@ const topEl = document.getElementById('sketch-top');
 const bottomEl = document.getElementById('sketch-bottom');
 if (!topEl || !bottomEl) throw new Error('missing sketch containers');
 
-// Show a loading state until the real-BAM fixture bundle arrives. The
-// synthetic mode is still available behind ?world=synthetic for fallback
-// + comparison.
+// v5.2: synthetic is the default world. The real-BAM loader (v5.1) stays
+// fully wired and is opt-in via ?world=real-bam — flip the default once
+// the fixture extraction is part of CI / GH Pages publishing.
 const params = new URLSearchParams(window.location.search);
-const worldKind = params.get('world') === 'synthetic' ? 'synthetic' : 'real-bam';
+const realBamRequested =
+  params.get('world') === 'real-bam' || params.get('world') === 'real';
+const worldKind: 'synthetic' | 'real-bam' = realBamRequested ? 'real-bam' : 'synthetic';
 showLoading(topEl, worldKind === 'real-bam' ? 'Loading chr20 reads…' : 'Generating…');
 
 let top: SketchHandle | null = null;
@@ -104,12 +106,30 @@ function showLoading(el: HTMLElement, msg: string): void {
   el.innerHTML = `<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#aaa;font-family:Inconsolata,monospace;font-size:14px;letter-spacing:0.05em">${msg}</div>`;
 }
 
+/**
+ * Randomize semantics:
+ *   - synthetic: regenerate the whole world with a fresh seed (new ref,
+ *     new scenarios, new reads). The reference length stays at the
+ *     synthetic default so the p5 ref-cache size remains valid.
+ *   - real-bam: pick a random already-loaded candidate to snap the
+ *     window to (the underlying world is fixed for the session).
+ */
+async function rerollWorld(handle: SketchHandle): Promise<void> {
+  if (worldKind === 'synthetic') {
+    const seed = Math.floor(Math.random() * 0x7fffffff) || 1;
+    const fresh = await buildWorld({ kind: 'synthetic', seed });
+    handle.setWorld(fresh);
+  } else {
+    handle.randomize();
+  }
+}
+
 function attachUiHandlers(handle: SketchHandle): void {
   const resetBtn = document.getElementById('reset-view');
   resetBtn?.addEventListener('click', () => handle.resetView());
 
   const randomizeBtn = document.getElementById('randomize');
-  randomizeBtn?.addEventListener('click', () => handle.randomize());
+  randomizeBtn?.addEventListener('click', () => void rerollWorld(handle));
 
   const prevCandBtn = document.getElementById('prev-cand');
   prevCandBtn?.addEventListener('click', () => handle.prevCandidate());
@@ -117,7 +137,7 @@ function attachUiHandlers(handle: SketchHandle): void {
   const nextCandBtn = document.getElementById('next-cand');
   nextCandBtn?.addEventListener('click', () => handle.nextCandidate());
 
-  // Keyboard navigation: ←/→ for candidate stepping, 'r' for randomize.
+  // Keyboard navigation: ←/→ for candidate stepping, 'r' for re-roll.
   // Skip when the user is typing in an input.
   window.addEventListener('keydown', (ev) => {
     if (ev.target instanceof HTMLInputElement || ev.target instanceof HTMLTextAreaElement) {
@@ -125,7 +145,7 @@ function attachUiHandlers(handle: SketchHandle): void {
     }
     if (ev.key === 'ArrowLeft') handle.prevCandidate();
     else if (ev.key === 'ArrowRight') handle.nextCandidate();
-    else if (ev.key === 'r' || ev.key === 'R') handle.randomize();
+    else if (ev.key === 'r' || ev.key === 'R') void rerollWorld(handle);
   });
 }
 
