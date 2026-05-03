@@ -70,41 +70,117 @@ import { mountDebugModal } from './sketch/debug-modal';
   },
 };
 
-const topEl = document.getElementById('sketch-top');
-const bottomEl = document.getElementById('sketch-bottom');
-if (!topEl || !bottomEl) throw new Error('missing sketch containers');
+const topElMaybe = document.getElementById('sketch-top');
+const bottomElMaybe = document.getElementById('sketch-bottom');
+if (!topElMaybe || !bottomElMaybe) throw new Error('missing sketch containers');
+const topEl: HTMLElement = topElMaybe;
+const bottomEl: HTMLElement = bottomElMaybe;
 
-// v5.2: synthetic is the default world. The real-BAM loader (v5.1) stays
-// fully wired and is opt-in via ?world=real-bam — flip the default once
-// the fixture extraction is part of CI / GH Pages publishing.
+// v5.3: welcome screen + explicit Synthetic / Real picker. Model loads
+// in parallel with the user reading the welcome text. Query-param
+// shortcuts (?world=synthetic|real-bam) skip the picker for direct
+// deep-linking.
 const params = new URLSearchParams(window.location.search);
-const realBamRequested =
-  params.get('world') === 'real-bam' || params.get('world') === 'real';
-const worldKind: 'synthetic' | 'real-bam' = realBamRequested ? 'real-bam' : 'synthetic';
-showLoading(topEl, worldKind === 'real-bam' ? 'Loading chr20 reads…' : 'Generating…');
+const queryWorld =
+  params.get('world') === 'real-bam' || params.get('world') === 'real'
+    ? 'real-bam'
+    : params.get('world') === 'synthetic'
+      ? 'synthetic'
+      : null;
 
 let top: SketchHandle | null = null;
-mountBottomSketch(bottomEl); // bottom canvas mounts immediately; it'll
-                              // display "no candidate" until top is ready
+let chosenWorldKind: 'synthetic' | 'real-bam' = 'synthetic';
 
-(async () => {
-  const world =
-    worldKind === 'synthetic'
-      ? await buildWorld({ kind: 'synthetic', seed: 42 })
-      : await buildWorld({ kind: 'real-bam' });
-  topEl.innerHTML = ''; // clear loading message
-  top = mountTopSketch(topEl, world);
-  attachUiHandlers(top);
-})().catch((err) => {
-  console.error('failed to load world:', err);
-  showLoading(topEl, `error: ${err instanceof Error ? err.message : 'load failed'}`);
+const welcomeEl = document.getElementById('welcome-overlay');
+const welcomeStatus = document.getElementById('welcome-status');
+const synthBtn = document.getElementById('start-synthetic') as HTMLButtonElement | null;
+const realBtn = document.getElementById('start-real') as HTMLButtonElement | null;
+const explainBtn = document.getElementById('show-explain');
+const explainEl = document.getElementById('welcome-explain');
+
+// Kick off the model load immediately. Buttons stay disabled until the
+// model finishes; user can read "What even is this?" in the meantime.
+import('./lib/DeepVariantModel').then(async ({ DeepVariantModel }) => {
+  let lastPercent = -1;
+  try {
+    const model = await DeepVariantModel.load({
+      onProgress: (frac) => {
+        const pct = Math.floor(frac * 100);
+        if (pct !== lastPercent && welcomeStatus) {
+          welcomeStatus.textContent = `Loading model… ${pct}%`;
+          lastPercent = pct;
+        }
+      },
+    });
+    if (welcomeStatus) welcomeStatus.textContent = 'Model ready · pick a mode';
+    if (synthBtn) synthBtn.disabled = false;
+    if (realBtn) realBtn.disabled = false;
+
+    // If a query-param picked a world, auto-start now that the model is ready.
+    if (queryWorld) {
+      void startWorld(queryWorld, model);
+    } else {
+      synthBtn?.addEventListener('click', () => void startWorld('synthetic', model));
+      realBtn?.addEventListener('click', () => void startWorld('real-bam', model));
+    }
+  } catch (err) {
+    if (welcomeStatus) {
+      welcomeStatus.textContent = `Model failed to load: ${err instanceof Error ? err.message : 'unknown'}`;
+      welcomeStatus.classList.add('error');
+    }
+  }
 });
 
-mountDebugModal();
+explainBtn?.addEventListener('click', () => {
+  if (!explainEl) return;
+  const showing = explainEl.style.display !== 'none';
+  explainEl.style.display = showing ? 'none' : 'block';
+});
 
-function showLoading(el: HTMLElement, msg: string): void {
-  el.innerHTML = `<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#aaa;font-family:Inconsolata,monospace;font-size:14px;letter-spacing:0.05em">${msg}</div>`;
+async function startWorld(
+  kind: 'synthetic' | 'real-bam',
+  model: import('./lib/DeepVariantModel').DeepVariantModel,
+): Promise<void> {
+  chosenWorldKind = kind;
+  if (welcomeStatus) {
+    welcomeStatus.textContent =
+      kind === 'real-bam' ? 'Loading chr20 reads…' : 'Generating world…';
+  }
+  if (synthBtn) synthBtn.disabled = true;
+  if (realBtn) realBtn.disabled = true;
+
+  try {
+    const world =
+      kind === 'synthetic'
+        ? await buildWorld({ kind: 'synthetic', seed: 42 })
+        : await buildWorld({ kind: 'real-bam' });
+
+    // Reveal sandbox containers before mounting so canvas size measurement
+    // sees the right viewport dimensions.
+    document.querySelectorAll('.hidden-until-ready').forEach((el) => {
+      (el as HTMLElement).classList.remove('hidden-until-ready');
+    });
+
+    top = mountTopSketch(topEl, world);
+    mountBottomSketch(bottomEl, model);
+    attachUiHandlers(top);
+
+    // Fade out the welcome overlay then remove it.
+    if (welcomeEl) {
+      welcomeEl.classList.add('fade-out');
+      setTimeout(() => welcomeEl.remove(), 320);
+    }
+  } catch (err) {
+    if (welcomeStatus) {
+      welcomeStatus.textContent = `Failed to start: ${err instanceof Error ? err.message : 'unknown'}`;
+      welcomeStatus.classList.add('error');
+    }
+    if (synthBtn) synthBtn.disabled = false;
+    if (realBtn) realBtn.disabled = false;
+  }
 }
+
+mountDebugModal();
 
 /**
  * Randomize semantics:
@@ -115,7 +191,7 @@ function showLoading(el: HTMLElement, msg: string): void {
  *     window to (the underlying world is fixed for the session).
  */
 async function rerollWorld(handle: SketchHandle): Promise<void> {
-  if (worldKind === 'synthetic') {
+  if (chosenWorldKind === 'synthetic') {
     const seed = Math.floor(Math.random() * 0x7fffffff) || 1;
     const fresh = await buildWorld({ kind: 'synthetic', seed });
     handle.setWorld(fresh);

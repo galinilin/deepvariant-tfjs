@@ -151,12 +151,155 @@
       .tooltip .ins-seq {
         color: #b88add;
       }
+      /* ----- Welcome overlay (v5.3) ----- */
+      .hidden-until-ready {
+        visibility: hidden;
+      }
+      .welcome-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 200;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #000;
+        padding: 32px 24px;
+        opacity: 1;
+        transition: opacity 0.3s ease;
+      }
+      .welcome-overlay.fade-out {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .welcome-card {
+        max-width: 640px;
+        width: 100%;
+        color: #ededed;
+        font-family: 'Inconsolata', ui-monospace, Menlo, monospace;
+        text-align: center;
+      }
+      .welcome-eyebrow {
+        color: #888;
+        font-size: 11px;
+        letter-spacing: 0.28em;
+        text-transform: uppercase;
+        margin-bottom: 18px;
+      }
+      .welcome-title {
+        margin: 0 0 12px 0;
+        font-family: 'Inconsolata', ui-monospace, Menlo, monospace;
+        font-weight: 600;
+        font-size: 32px;
+        letter-spacing: 0.01em;
+        color: #fff;
+      }
+      .welcome-sub {
+        color: #aaa;
+        font-size: 14px;
+        line-height: 1.6;
+        margin: 0 auto 36px;
+        max-width: 520px;
+      }
+      .welcome-options {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+        margin-bottom: 18px;
+      }
+      .welcome-btn {
+        background: #0a0a0a;
+        border: 1px solid #2a2a2a;
+        color: #d8d8d8;
+        font-family: 'Inconsolata', ui-monospace, Menlo, monospace;
+        font-size: 13px;
+        cursor: pointer;
+        padding: 18px 16px;
+        text-align: left;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        transition: border-color 0.15s, color 0.15s, background 0.15s;
+      }
+      .welcome-btn:hover:not(:disabled) {
+        color: #fff;
+        border-color: #ffdc6e;
+      }
+      .welcome-btn:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .welcome-btn-title {
+        font-size: 16px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        color: #fff;
+      }
+      .welcome-btn-sub {
+        color: #999;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+      .welcome-btn-warn {
+        color: #d4a366;
+        font-size: 11px;
+        line-height: 1.45;
+        margin-top: 2px;
+        letter-spacing: 0.01em;
+      }
+      .welcome-status {
+        color: #888;
+        font-size: 12px;
+        letter-spacing: 0.06em;
+        min-height: 18px;
+        margin-bottom: 32px;
+      }
+      .welcome-status.error {
+        color: #e07060;
+      }
+      .welcome-link {
+        background: none;
+        border: none;
+        color: #888;
+        font-family: 'Inconsolata', ui-monospace, Menlo, monospace;
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        cursor: pointer;
+        padding: 6px 12px;
+        text-decoration: underline;
+        text-decoration-color: #444;
+        text-underline-offset: 4px;
+      }
+      .welcome-link:hover {
+        color: #ededed;
+        text-decoration-color: #888;
+      }
+      .welcome-explain {
+        margin-top: 22px;
+        padding-top: 18px;
+        border-top: 1px solid #1f1f1f;
+        text-align: left;
+        color: #b6b6b6;
+        font-size: 12.5px;
+        line-height: 1.7;
+      }
+      .welcome-explain p {
+        margin: 0 0 12px 0;
+      }
+      .welcome-explain p:last-child { margin-bottom: 0; }
+      .welcome-explain b { color: #ededed; }
+      .welcome-explain a { color: #ffdc6e; text-decoration: none; }
+      .welcome-explain a:hover { text-decoration: underline; }
+      .welcome-explain-meta {
+        color: #888;
+        font-size: 11.5px;
+        margin-top: 14px;
+      }
     </style>
   </head>
   <body>
-    <div id="sketch-top"></div>
-    <div id="sketch-bottom"></div>
-    <div class="corner-buttons">
+    <div id="sketch-top" class="hidden-until-ready"></div>
+    <div id="sketch-bottom" class="hidden-until-ready"></div>
+    <div class="corner-buttons hidden-until-ready">
       <button id="prev-cand" class="reset-btn" type="button" title="Previous candidate (←)">◀ Prev</button>
       <button id="next-cand" class="reset-btn" type="button" title="Next candidate (→)">Next ▶</button>
       <button id="randomize" class="reset-btn" type="button" title="Random candidate (R)">Randomize</button>
@@ -165,6 +308,64 @@
     </div>
     <div id="read-tooltip" class="tooltip"></div>
     <div id="debug-modal" class="debug-modal" style="display:none"></div>
+
+    <!-- Welcome / loading overlay. Shown on first paint; main.ts hides it
+         once the user picks a world and the sketches are mounted. -->
+    <div id="welcome-overlay" class="welcome-overlay">
+      <div class="welcome-card">
+        <div class="welcome-eyebrow">deepvariant · in-browser</div>
+        <h1 class="welcome-title">Variant calling, locally.</h1>
+        <p class="welcome-sub">
+          Google's DeepVariant 1.8 InceptionV3 model running on your GPU
+          via TensorFlow.js. Encoded pileup → softmax over hom_ref · het · hom_alt.
+        </p>
+
+        <div class="welcome-options">
+          <button id="start-synthetic" class="welcome-btn" type="button" disabled>
+            <span class="welcome-btn-title">Synthetic</span>
+            <span class="welcome-btn-sub">generated reads, scenarios, sandbox UX</span>
+          </button>
+          <button id="start-real" class="welcome-btn" type="button" disabled>
+            <span class="welcome-btn-title">Real BAM</span>
+            <span class="welcome-btn-sub">chr20 NA12878 from DV testdata</span>
+            <span class="welcome-btn-warn">+ ~2.5 MB read fixture · more memory · same model</span>
+          </button>
+        </div>
+
+        <div class="welcome-status" id="welcome-status">Loading model…</div>
+
+        <button id="show-explain" class="welcome-link" type="button">
+          What even is this?
+        </button>
+        <div class="welcome-explain" id="welcome-explain" style="display:none">
+          <p>
+            DeepVariant is a deep-learning variant caller. Given a candidate
+            position in a genome, it builds a 100×221×7 "pileup image" of
+            the reads spanning that position and feeds it through an
+            InceptionV3 CNN that outputs P(hom_ref · het · hom_alt).
+          </p>
+          <p>
+            This site runs the released DV 1.8 WGS model end-to-end in
+            your browser: the encoder, the candidate engine, and the model.
+            No server. No data leaves your machine.
+          </p>
+          <p>
+            <b>Synthetic</b> generates a 1500&nbsp;bp reference + scenarios
+            (het, hom_alt, deletion, insertion, low-quality variants…) so
+            you can see the encoding shapes directly.
+            <b>Real BAM</b> loads ~2,500 actual NA12878 reads + 43
+            DV-emitted candidates from a 5&nbsp;kb slice of chr20 in DV's
+            own testdata — Prev/Next steps through real variants.
+          </p>
+          <p class="welcome-explain-meta">
+            Source: <a href="https://github.com/galinilin/deepvariant-tfjs" target="_blank" rel="noopener">deepvariant-tfjs</a>
+            · model conversion: <a href="https://github.com/galinilin/dv-tfjs" target="_blank" rel="noopener">dv-tfjs</a>
+            · upstream: <a href="https://github.com/google/deepvariant" target="_blank" rel="noopener">google/deepvariant</a>
+          </p>
+        </div>
+      </div>
+    </div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

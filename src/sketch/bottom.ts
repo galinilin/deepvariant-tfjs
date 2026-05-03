@@ -45,9 +45,10 @@ interface CachedPrediction {
   channelImages: p5.Image[]; // 7 grayscale strips
 }
 
-export function mountBottomSketch(container: HTMLElement): BottomHandle {
-  let model: DeepVariantModel | null = null;
-  let modelPromise: Promise<DeepVariantModel> | null = null;
+export function mountBottomSketch(
+  container: HTMLElement,
+  model: DeepVariantModel,
+): BottomHandle {
   let modelError: string | null = null;
   let predicting = false;
   let cached: CachedPrediction | null = null;
@@ -78,18 +79,8 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
       p.createCanvas(w, h);
       p.pixelDensity(p.displayDensity());
       p.textFont('Inconsolata');
-
-      // Lazy-start model load; first draw frame after this resolves
-      // unblocks the predict pipeline.
-      modelPromise = DeepVariantModel.load({});
-      modelPromise
-        .then((m) => {
-          model = m;
-        })
-        .catch((err) => {
-          modelError =
-            err instanceof Error ? err.message : 'unknown model load error';
-        });
+      // Model is pre-loaded by the welcome flow and passed in. No lazy
+      // load here — by the time bottom is mounted, model is ready.
     };
 
     p.windowResized = () => {
@@ -107,7 +98,7 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
       const gen = sandboxState.readsGeneration;
 
       // Schedule a predict if state changed and we have everything we need.
-      if (model && c && reads && reference && pos !== null) {
+      if (c && reads && reference && pos !== null) {
         const key = candidateKey();
         const stale =
           !cached ||
@@ -152,7 +143,7 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
   }
 
   async function runPredict(): Promise<void> {
-    if (!model || predicting || !pendingTarget) return;
+    if (predicting || !pendingTarget) return;
     const target = pendingTarget;
     pendingTarget = null;
 
@@ -248,7 +239,7 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
         y,
         w,
         h,
-        model ? 'predicting…' : 'loading model…',
+        'predicting…',
         PLACEHOLDER_COLOR,
         12,
       );
@@ -335,18 +326,13 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
     }
 
     if (!cached || cached.candidateKey !== candidateKey()) {
-      const msg = model
-        ? predicting || pendingTimer !== null
-          ? 'predicting…'
-          : 'predicting…'
-        : 'loading model…';
       drawCenteredText(
         p,
         x,
         cursorY,
         w,
         h - (cursorY - y) - 6,
-        msg,
+        'predicting…',
         PLACEHOLDER_COLOR,
         12,
       );
@@ -454,7 +440,7 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
   return {
     destroy: () => {
       if (pendingTimer !== null) window.clearTimeout(pendingTimer);
-      if (model) model.dispose();
+      // Model is owned by main.ts; we don't dispose here.
       instance.remove();
     },
   };
