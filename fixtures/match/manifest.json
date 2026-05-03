@@ -1,0 +1,1629 @@
+{
+  "n": 84,
+  "bam": "NA12878_S1.chr20.10_10p1mb.bam",
+  "fasta": "ucsc.hg19.chr20.unittest.fasta.gz",
+  "tfrecords": [
+    "golden.calling_examples.tfrecord.gz-00000-of-00003",
+    "golden.calling_examples.tfrecord.gz-00001-of-00003",
+    "golden.calling_examples.tfrecord.gz-00002-of-00003"
+  ],
+  "shape": [
+    84,
+    100,
+    221,
+    7
+  ],
+  "samples": [
+    {
+      "index": 0,
+      "chrom": "chr20",
+      "position_genomic": 10000116,
+      "position_1_based": 10000117,
+      "ref_alleles": "C",
+      "alt_alleles": [
+        "T"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "T"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 180,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 1,
+      "chrom": "chr20",
+      "position_genomic": 10000210,
+      "position_1_based": 10000211,
+      "ref_alleles": "C",
+      "alt_alleles": [
+        "T"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "T"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 187,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 2,
+      "chrom": "chr20",
+      "position_genomic": 10000438,
+      "position_1_based": 10000439,
+      "ref_alleles": "T",
+      "alt_alleles": [
+        "G"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "G"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 186,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 3,
+      "chrom": "chr20",
+      "position_genomic": 10000597,
+      "position_1_based": 10000598,
+      "ref_alleles": "T",
+      "alt_alleles": [
+        "A"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "A"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 157,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 4,
+      "chrom": "chr20",
+      "position_genomic": 10000693,
+      "position_1_based": 10000694,
+      "ref_alleles": "G",
+      "alt_alleles": [
+        "A"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "A"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 161,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 5,
+      "chrom": "chr20",
+      "position_genomic": 10000757,
+      "position_1_based": 10000758,
+      "ref_alleles": "T",
+      "alt_alleles": [
+        "A"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "A"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 152,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 6,
+      "chrom": "chr20",
+      "position_genomic": 10003020,
+      "position_1_based": 10003021,
+      "ref_alleles": "C",
+      "alt_alleles": [
+        "T"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "T"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 145,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 7,
+      "chrom": "chr20",
+      "position_genomic": 10003108,
+      "position_1_based": 10003109,
+      "ref_alleles": "A",
+      "alt_alleles": [
+        "C"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "C"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 140,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 8,
+      "chrom": "chr20",
+      "position_genomic": 10003357,
+      "position_1_based": 10003358,
+      "ref_alleles": "A",
+      "alt_alleles": [
+        "C"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "C"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 144,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 9,
+      "chrom": "chr20",
+      "position_genomic": 10003650,
+      "position_1_based": 10003651,
+      "ref_alleles": "T",
+      "alt_alleles": [
+        "C"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "C"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 127,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 10,
+      "chrom": "chr20",
+      "position_genomic": 10003691,
+      "position_1_based": 10003692,
+      "ref_alleles": "A",
+      "alt_alleles": [
+        "G"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "G"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 132,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 11,
+      "chrom": "chr20",
+      "position_genomic": 10003831,
+      "position_1_based": 10003832,
+      "ref_alleles": "G",
+      "alt_alleles": [
+        "A"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "A"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 143,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 12,
+      "chrom": "chr20",
+      "position_genomic": 10006290,
+      "position_1_based": 10006291,
+      "ref_alleles": "G",
+      "alt_alleles": [
+        "A"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "A"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 175,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 13,
+      "chrom": "chr20",
+      "position_genomic": 10006403,
+      "position_1_based": 10006404,
+      "ref_alleles": "A",
+      "alt_alleles": [
+        "C"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "C"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 160,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 14,
+      "chrom": "chr20",
+      "position_genomic": 10006681,
+      "position_1_based": 10006682,
+      "ref_alleles": "T",
+      "alt_alleles": [
+        "A"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "A"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 155,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 15,
+      "chrom": "chr20",
+      "position_genomic": 10006818,
+      "position_1_based": 10006819,
+      "ref_alleles": "AAAAC",
+      "alt_alleles": [
+        "A"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "A"
+      ],
+      "primary_kind": "del",
+      "n_reads": 155,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 16,
+      "chrom": "chr20",
+      "position_genomic": 10009226,
+      "position_1_based": 10009227,
+      "ref_alleles": "A",
+      "alt_alleles": [
+        "G"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "G"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 197,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 17,
+      "chrom": "chr20",
+      "position_genomic": 10009245,
+      "position_1_based": 10009246,
+      "ref_alleles": "A",
+      "alt_alleles": [
+        "G"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "G"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 204,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 18,
+      "chrom": "chr20",
+      "position_genomic": 10009399,
+      "position_1_based": 10009400,
+      "ref_alleles": "T",
+      "alt_alleles": [
+        "A"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "A"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 193,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 19,
+      "chrom": "chr20",
+      "position_genomic": 10009511,
+      "position_1_based": 10009512,
+      "ref_alleles": "C",
+      "alt_alleles": [
+        "G"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "G"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 177,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 20,
+      "chrom": "chr20",
+      "position_genomic": 10009718,
+      "position_1_based": 10009719,
+      "ref_alleles": "A",
+      "alt_alleles": [
+        "G"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "G"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 135,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 21,
+      "chrom": "chr20",
+      "position_genomic": 10009794,
+      "position_1_based": 10009795,
+      "ref_alleles": "A",
+      "alt_alleles": [
+        "G"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "G"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 136,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 22,
+      "chrom": "chr20",
+      "position_genomic": 10009843,
+      "position_1_based": 10009844,
+      "ref_alleles": "G",
+      "alt_alleles": [
+        "A"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "A"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 136,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 23,
+      "chrom": "chr20",
+      "position_genomic": 10009870,
+      "position_1_based": 10009871,
+      "ref_alleles": "A",
+      "alt_alleles": [
+        "G"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "G"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 151,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 24,
+      "chrom": "chr20",
+      "position_genomic": 10009874,
+      "position_1_based": 10009875,
+      "ref_alleles": "A",
+      "alt_alleles": [
+        "G"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "G"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 149,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 25,
+      "chrom": "chr20",
+      "position_genomic": 10009876,
+      "position_1_based": 10009877,
+      "ref_alleles": "A",
+      "alt_alleles": [
+        "G"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "G"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 148,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 26,
+      "chrom": "chr20",
+      "position_genomic": 10009878,
+      "position_1_based": 10009879,
+      "ref_alleles": "A",
+      "alt_alleles": [
+        "G"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "G"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 150,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 27,
+      "chrom": "chr20",
+      "position_genomic": 10009882,
+      "position_1_based": 10009883,
+      "ref_alleles": "A",
+      "alt_alleles": [
+        "G"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "G"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 153,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 28,
+      "chrom": "chr20",
+      "position_genomic": 10001018,
+      "position_1_based": 10001019,
+      "ref_alleles": "T",
+      "alt_alleles": [
+        "G"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "G"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 116,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 29,
+      "chrom": "chr20",
+      "position_genomic": 10001297,
+      "position_1_based": 10001298,
+      "ref_alleles": "T",
+      "alt_alleles": [
+        "A"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "A"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 122,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 30,
+      "chrom": "chr20",
+      "position_genomic": 10001435,
+      "position_1_based": 10001436,
+      "ref_alleles": "A",
+      "alt_alleles": [
+        "AAGGCT"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "AAGGCT"
+      ],
+      "primary_kind": "ins",
+      "n_reads": 141,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 31,
+      "chrom": "chr20",
+      "position_genomic": 10001473,
+      "position_1_based": 10001474,
+      "ref_alleles": "C",
+      "alt_alleles": [
+        "T"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "T"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 140,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 32,
+      "chrom": "chr20",
+      "position_genomic": 10001616,
+      "position_1_based": 10001617,
+      "ref_alleles": "C",
+      "alt_alleles": [
+        "A"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "A"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 135,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 33,
+      "chrom": "chr20",
+      "position_genomic": 10001627,
+      "position_1_based": 10001628,
+      "ref_alleles": "G",
+      "alt_alleles": [
+        "A"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "A"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 135,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 34,
+      "chrom": "chr20",
+      "position_genomic": 10001660,
+      "position_1_based": 10001661,
+      "ref_alleles": "T",
+      "alt_alleles": [
+        "C"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "C"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 132,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 35,
+      "chrom": "chr20",
+      "position_genomic": 10001669,
+      "position_1_based": 10001670,
+      "ref_alleles": "T",
+      "alt_alleles": [
+        "G"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "G"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 130,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 36,
+      "chrom": "chr20",
+      "position_genomic": 10004093,
+      "position_1_based": 10004094,
+      "ref_alleles": "A",
+      "alt_alleles": [
+        "C"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "C"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 138,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 37,
+      "chrom": "chr20",
+      "position_genomic": 10004146,
+      "position_1_based": 10004147,
+      "ref_alleles": "A",
+      "alt_alleles": [
+        "G"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "G"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 164,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 38,
+      "chrom": "chr20",
+      "position_genomic": 10004192,
+      "position_1_based": 10004193,
+      "ref_alleles": "G",
+      "alt_alleles": [
+        "T"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "T"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 158,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 39,
+      "chrom": "chr20",
+      "position_genomic": 10004221,
+      "position_1_based": 10004222,
+      "ref_alleles": "C",
+      "alt_alleles": [
+        "CA"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "CA"
+      ],
+      "primary_kind": "ins",
+      "n_reads": 162,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 40,
+      "chrom": "chr20",
+      "position_genomic": 10004222,
+      "position_1_based": 10004223,
+      "ref_alleles": "A",
+      "alt_alleles": [
+        "AG"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "AG"
+      ],
+      "primary_kind": "ins",
+      "n_reads": 163,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 41,
+      "chrom": "chr20",
+      "position_genomic": 10004252,
+      "position_1_based": 10004253,
+      "ref_alleles": "A",
+      "alt_alleles": [
+        "T"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "T"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 166,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 42,
+      "chrom": "chr20",
+      "position_genomic": 10004350,
+      "position_1_based": 10004351,
+      "ref_alleles": "C",
+      "alt_alleles": [
+        "G"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "G"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 165,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 43,
+      "chrom": "chr20",
+      "position_genomic": 10004388,
+      "position_1_based": 10004389,
+      "ref_alleles": "T",
+      "alt_alleles": [
+        "G"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "G"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 170,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 44,
+      "chrom": "chr20",
+      "position_genomic": 10004609,
+      "position_1_based": 10004610,
+      "ref_alleles": "A",
+      "alt_alleles": [
+        "C"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "C"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 166,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 45,
+      "chrom": "chr20",
+      "position_genomic": 10004724,
+      "position_1_based": 10004725,
+      "ref_alleles": "A",
+      "alt_alleles": [
+        "G"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "G"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 171,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 46,
+      "chrom": "chr20",
+      "position_genomic": 10004768,
+      "position_1_based": 10004769,
+      "ref_alleles": "TAAAACTATGC",
+      "alt_alleles": [
+        "T"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "T"
+      ],
+      "primary_kind": "del",
+      "n_reads": 166,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 47,
+      "chrom": "chr20",
+      "position_genomic": 10004873,
+      "position_1_based": 10004874,
+      "ref_alleles": "A",
+      "alt_alleles": [
+        "C"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "C"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 168,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 48,
+      "chrom": "chr20",
+      "position_genomic": 10004886,
+      "position_1_based": 10004887,
+      "ref_alleles": "A",
+      "alt_alleles": [
+        "G"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "G"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 171,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 49,
+      "chrom": "chr20",
+      "position_genomic": 10007149,
+      "position_1_based": 10007150,
+      "ref_alleles": "G",
+      "alt_alleles": [
+        "C"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "C"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 154,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 50,
+      "chrom": "chr20",
+      "position_genomic": 10007174,
+      "position_1_based": 10007175,
+      "ref_alleles": "C",
+      "alt_alleles": [
+        "T"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "T"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 155,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 51,
+      "chrom": "chr20",
+      "position_genomic": 10007351,
+      "position_1_based": 10007352,
+      "ref_alleles": "C",
+      "alt_alleles": [
+        "T"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "T"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 154,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 52,
+      "chrom": "chr20",
+      "position_genomic": 10007530,
+      "position_1_based": 10007531,
+      "ref_alleles": "A",
+      "alt_alleles": [
+        "G"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "G"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 164,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 53,
+      "chrom": "chr20",
+      "position_genomic": 10007979,
+      "position_1_based": 10007980,
+      "ref_alleles": "A",
+      "alt_alleles": [
+        "C"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "C"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 150,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 54,
+      "chrom": "chr20",
+      "position_genomic": 10002057,
+      "position_1_based": 10002058,
+      "ref_alleles": "T",
+      "alt_alleles": [
+        "G"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "G"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 152,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 55,
+      "chrom": "chr20",
+      "position_genomic": 10002098,
+      "position_1_based": 10002099,
+      "ref_alleles": "C",
+      "alt_alleles": [
+        "T"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "T"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 164,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 56,
+      "chrom": "chr20",
+      "position_genomic": 10002137,
+      "position_1_based": 10002138,
+      "ref_alleles": "C",
+      "alt_alleles": [
+        "G"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "G"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 172,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 57,
+      "chrom": "chr20",
+      "position_genomic": 10002141,
+      "position_1_based": 10002142,
+      "ref_alleles": "G",
+      "alt_alleles": [
+        "C"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "C"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 173,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 58,
+      "chrom": "chr20",
+      "position_genomic": 10002457,
+      "position_1_based": 10002458,
+      "ref_alleles": "G",
+      "alt_alleles": [
+        "GTT",
+        "GTTT"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "GTT"
+      ],
+      "primary_kind": "ins",
+      "n_reads": 187,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 59,
+      "chrom": "chr20",
+      "position_genomic": 10002457,
+      "position_1_based": 10002458,
+      "ref_alleles": "G",
+      "alt_alleles": [
+        "GTT",
+        "GTTT"
+      ],
+      "alt_indices": [
+        1
+      ],
+      "emitted_alts": [
+        "GTTT"
+      ],
+      "primary_kind": "ins",
+      "n_reads": 187,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 60,
+      "chrom": "chr20",
+      "position_genomic": 10002457,
+      "position_1_based": 10002458,
+      "ref_alleles": "G",
+      "alt_alleles": [
+        "GTT",
+        "GTTT"
+      ],
+      "alt_indices": [
+        0,
+        1
+      ],
+      "emitted_alts": [
+        "GTT",
+        "GTTT"
+      ],
+      "primary_kind": "ins",
+      "n_reads": 187,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 61,
+      "chrom": "chr20",
+      "position_genomic": 10002469,
+      "position_1_based": 10002470,
+      "ref_alleles": "C",
+      "alt_alleles": [
+        "T"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "T"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 184,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 62,
+      "chrom": "chr20",
+      "position_genomic": 10002492,
+      "position_1_based": 10002493,
+      "ref_alleles": "A",
+      "alt_alleles": [
+        "C"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "C"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 182,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 63,
+      "chrom": "chr20",
+      "position_genomic": 10002624,
+      "position_1_based": 10002625,
+      "ref_alleles": "G",
+      "alt_alleles": [
+        "T"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "T"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 154,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 64,
+      "chrom": "chr20",
+      "position_genomic": 10005009,
+      "position_1_based": 10005010,
+      "ref_alleles": "C",
+      "alt_alleles": [
+        "T"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "T"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 167,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 65,
+      "chrom": "chr20",
+      "position_genomic": 10005426,
+      "position_1_based": 10005427,
+      "ref_alleles": "C",
+      "alt_alleles": [
+        "T"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "T"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 157,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 66,
+      "chrom": "chr20",
+      "position_genomic": 10005498,
+      "position_1_based": 10005499,
+      "ref_alleles": "A",
+      "alt_alleles": [
+        "G"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "G"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 157,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 67,
+      "chrom": "chr20",
+      "position_genomic": 10005586,
+      "position_1_based": 10005587,
+      "ref_alleles": "A",
+      "alt_alleles": [
+        "G"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "G"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 157,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 68,
+      "chrom": "chr20",
+      "position_genomic": 10005722,
+      "position_1_based": 10005723,
+      "ref_alleles": "A",
+      "alt_alleles": [
+        "G"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "G"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 175,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 69,
+      "chrom": "chr20",
+      "position_genomic": 10008028,
+      "position_1_based": 10008029,
+      "ref_alleles": "T",
+      "alt_alleles": [
+        "TA"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "TA"
+      ],
+      "primary_kind": "ins",
+      "n_reads": 148,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 70,
+      "chrom": "chr20",
+      "position_genomic": 10008145,
+      "position_1_based": 10008146,
+      "ref_alleles": "TA",
+      "alt_alleles": [
+        "T"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "T"
+      ],
+      "primary_kind": "del",
+      "n_reads": 147,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 71,
+      "chrom": "chr20",
+      "position_genomic": 10008220,
+      "position_1_based": 10008221,
+      "ref_alleles": "T",
+      "alt_alleles": [
+        "C"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "C"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 152,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 72,
+      "chrom": "chr20",
+      "position_genomic": 10008457,
+      "position_1_based": 10008458,
+      "ref_alleles": "T",
+      "alt_alleles": [
+        "G"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "G"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 163,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 73,
+      "chrom": "chr20",
+      "position_genomic": 10008716,
+      "position_1_based": 10008717,
+      "ref_alleles": "AT",
+      "alt_alleles": [
+        "A"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "A"
+      ],
+      "primary_kind": "del",
+      "n_reads": 128,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 74,
+      "chrom": "chr20",
+      "position_genomic": 10008741,
+      "position_1_based": 10008742,
+      "ref_alleles": "G",
+      "alt_alleles": [
+        "T"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "T"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 118,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 75,
+      "chrom": "chr20",
+      "position_genomic": 10008749,
+      "position_1_based": 10008750,
+      "ref_alleles": "T",
+      "alt_alleles": [
+        "TAA"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "TAA"
+      ],
+      "primary_kind": "ins",
+      "n_reads": 110,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 76,
+      "chrom": "chr20",
+      "position_genomic": 10008757,
+      "position_1_based": 10008758,
+      "ref_alleles": "C",
+      "alt_alleles": [
+        "A",
+        "CA"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "A"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 107,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 77,
+      "chrom": "chr20",
+      "position_genomic": 10008757,
+      "position_1_based": 10008758,
+      "ref_alleles": "C",
+      "alt_alleles": [
+        "A",
+        "CA"
+      ],
+      "alt_indices": [
+        1
+      ],
+      "emitted_alts": [
+        "CA"
+      ],
+      "primary_kind": "ins",
+      "n_reads": 107,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 78,
+      "chrom": "chr20",
+      "position_genomic": 10008757,
+      "position_1_based": 10008758,
+      "ref_alleles": "C",
+      "alt_alleles": [
+        "A",
+        "CA"
+      ],
+      "alt_indices": [
+        0,
+        1
+      ],
+      "emitted_alts": [
+        "A",
+        "CA"
+      ],
+      "primary_kind": "snv",
+      "n_reads": 107,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 79,
+      "chrom": "chr20",
+      "position_genomic": 10008920,
+      "position_1_based": 10008921,
+      "ref_alleles": "C",
+      "alt_alleles": [
+        "CA"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "CA"
+      ],
+      "primary_kind": "ins",
+      "n_reads": 140,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 80,
+      "chrom": "chr20",
+      "position_genomic": 10008947,
+      "position_1_based": 10008948,
+      "ref_alleles": "TA",
+      "alt_alleles": [
+        "T"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "T"
+      ],
+      "primary_kind": "del",
+      "n_reads": 140,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 81,
+      "chrom": "chr20",
+      "position_genomic": 10008951,
+      "position_1_based": 10008952,
+      "ref_alleles": "CACACACACACA",
+      "alt_alleles": [
+        "C",
+        "CCACACACACA"
+      ],
+      "alt_indices": [
+        0
+      ],
+      "emitted_alts": [
+        "C"
+      ],
+      "primary_kind": "del",
+      "n_reads": 140,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 82,
+      "chrom": "chr20",
+      "position_genomic": 10008951,
+      "position_1_based": 10008952,
+      "ref_alleles": "CACACACACACA",
+      "alt_alleles": [
+        "C",
+        "CCACACACACA"
+      ],
+      "alt_indices": [
+        1
+      ],
+      "emitted_alts": [
+        "CCACACACACA"
+      ],
+      "primary_kind": "complex",
+      "n_reads": 140,
+      "dv_argmax": "hom_alt"
+    },
+    {
+      "index": 83,
+      "chrom": "chr20",
+      "position_genomic": 10008951,
+      "position_1_based": 10008952,
+      "ref_alleles": "CACACACACACA",
+      "alt_alleles": [
+        "C",
+        "CCACACACACA"
+      ],
+      "alt_indices": [
+        0,
+        1
+      ],
+      "emitted_alts": [
+        "C",
+        "CCACACACACA"
+      ],
+      "primary_kind": "del",
+      "n_reads": 140,
+      "dv_argmax": "hom_alt"
+    }
+  ]
+}
