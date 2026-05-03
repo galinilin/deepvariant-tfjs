@@ -98,45 +98,40 @@ const realBtn = document.getElementById('start-real') as HTMLButtonElement | nul
 const explainBtn = document.getElementById('show-explain');
 const explainEl = document.getElementById('welcome-explain');
 
-// Kick off the model load immediately. Buttons stay disabled until the
-// model finishes; user can read "What even is this?" in the meantime.
-import('./lib/DeepVariantModel').then(async ({ DeepVariantModel }) => {
-  let lastPercent = -1;
-  try {
-    const model = await DeepVariantModel.load({
-      onProgress: (frac) => {
-        const pct = Math.floor(frac * 100);
-        if (pct !== lastPercent && welcomeStatus) {
-          welcomeStatus.textContent = `Loading model… ${pct}%`;
-          lastPercent = pct;
-        }
-      },
-      onStage: (stage) => {
-        if (!welcomeStatus) return;
-        if (stage === 'warming') {
-          welcomeStatus.textContent = 'Compiling shaders…';
-        } else if (stage === 'ready') {
-          welcomeStatus.textContent = 'Model ready · pick a mode';
-        }
-      },
-    });
-    if (synthBtn) synthBtn.disabled = false;
-    if (realBtn) realBtn.disabled = false;
+// v5.3: lazy model load. The 22 MB checkpoint download only starts when
+// the user commits to a mode, not on page open. Visitors who never click
+// pay nothing. Buttons are enabled immediately; clicking either kicks off
+// the load + warmup + world build pipeline with live status.
+let modelLoadInFlight:
+  | Promise<import('./lib/DeepVariantModel').DeepVariantModel>
+  | null = null;
 
-    // If a query-param picked a world, auto-start now that the model is ready.
-    if (queryWorld) {
-      void startWorld(queryWorld, model);
-    } else {
-      synthBtn?.addEventListener('click', () => void startWorld('synthetic', model));
-      realBtn?.addEventListener('click', () => void startWorld('real-bam', model));
-    }
-  } catch (err) {
-    if (welcomeStatus) {
-      welcomeStatus.textContent = `Model failed to load: ${err instanceof Error ? err.message : 'unknown'}`;
-      welcomeStatus.classList.add('error');
-    }
-  }
-});
+async function loadModel(): Promise<
+  import('./lib/DeepVariantModel').DeepVariantModel
+> {
+  if (modelLoadInFlight) return modelLoadInFlight;
+  const { DeepVariantModel } = await import('./lib/DeepVariantModel');
+  let lastPercent = -1;
+  modelLoadInFlight = DeepVariantModel.load({
+    onProgress: (frac) => {
+      const pct = Math.floor(frac * 100);
+      if (pct !== lastPercent && welcomeStatus) {
+        welcomeStatus.textContent = `Loading model… ${pct}%`;
+        lastPercent = pct;
+      }
+    },
+    onStage: (stage) => {
+      if (!welcomeStatus) return;
+      if (stage === 'warming') welcomeStatus.textContent = 'Compiling shaders…';
+      else if (stage === 'ready') welcomeStatus.textContent = 'Building world…';
+    },
+  });
+  // If the load rejects, clear the cache so a retry click can try again.
+  modelLoadInFlight.catch(() => {
+    modelLoadInFlight = null;
+  });
+  return modelLoadInFlight;
+}
 
 explainBtn?.addEventListener('click', () => {
   if (!explainEl) return;
@@ -144,23 +139,32 @@ explainBtn?.addEventListener('click', () => {
   explainEl.style.display = showing ? 'none' : 'block';
 });
 
-async function startWorld(
-  kind: 'synthetic' | 'real-bam',
-  model: import('./lib/DeepVariantModel').DeepVariantModel,
-): Promise<void> {
+// Buttons enabled immediately — the load happens on click, not on open.
+synthBtn?.addEventListener('click', () => void startWorld('synthetic'));
+realBtn?.addEventListener('click', () => void startWorld('real-bam'));
+
+// Query-param shortcut still works: triggers the same startWorld path,
+// which loads the model on demand.
+if (queryWorld) {
+  void startWorld(queryWorld);
+}
+
+async function startWorld(kind: 'synthetic' | 'real-bam'): Promise<void> {
   chosenWorldKind = kind;
-  if (welcomeStatus) {
-    welcomeStatus.textContent =
-      kind === 'real-bam' ? 'Loading chr20 reads…' : 'Generating world…';
-  }
   if (synthBtn) synthBtn.disabled = true;
   if (realBtn) realBtn.disabled = true;
+  if (welcomeStatus) welcomeStatus.classList.remove('error');
 
   try {
-    const world =
+    // Load model + build world in parallel — both are async, both
+    // depend on the click but not on each other. Model load callbacks
+    // own the welcome status text during the longer (~22 MB) download.
+    const buildingWorld = buildWorld(
       kind === 'synthetic'
-        ? await buildWorld({ kind: 'synthetic', seed: 42 })
-        : await buildWorld({ kind: 'real-bam' });
+        ? { kind: 'synthetic', seed: 42 }
+        : { kind: 'real-bam' },
+    );
+    const [model, world] = await Promise.all([loadModel(), buildingWorld]);
 
     // Reveal sandbox containers before mounting so canvas size measurement
     // sees the right viewport dimensions.

@@ -246,6 +246,13 @@
         margin-top: 2px;
         letter-spacing: 0.01em;
       }
+      .welcome-btn-meta {
+        color: #6c6c6c;
+        font-size: 11px;
+        line-height: 1.45;
+        margin-top: 2px;
+        letter-spacing: 0.01em;
+      }
       .welcome-status {
         color: #888;
         font-size: 12px;
@@ -321,18 +328,19 @@
         </p>
 
         <div class="welcome-options">
-          <button id="start-synthetic" class="welcome-btn" type="button" disabled>
+          <button id="start-synthetic" class="welcome-btn" type="button">
             <span class="welcome-btn-title">Synthetic</span>
             <span class="welcome-btn-sub">generated reads, scenarios, sandbox UX</span>
+            <span class="welcome-btn-meta">~22 MB model on click</span>
           </button>
-          <button id="start-real" class="welcome-btn" type="button" disabled>
+          <button id="start-real" class="welcome-btn" type="button">
             <span class="welcome-btn-title">Real BAM</span>
             <span class="welcome-btn-sub">chr20 NA12878 from DV testdata</span>
-            <span class="welcome-btn-warn">+ ~2.5 MB read fixture · more memory · same model</span>
+            <span class="welcome-btn-warn">~22 MB model + ~2.5 MB reads on click</span>
           </button>
         </div>
 
-        <div class="welcome-status" id="welcome-status">Loading model…</div>
+        <div class="welcome-status" id="welcome-status"></div>
 
         <button id="show-explain" class="welcome-link" type="button">
           What even is this?
