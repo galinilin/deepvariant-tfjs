@@ -98,6 +98,15 @@ export function buildReads(
   return reads;
 }
 
+// Per-base sequencing error rate. Illumina is typically 0.1–1%;
+// 0.7% lands the encoded image's `differs_from_ref=254` cell count near
+// the 40–78 range we see in real BAM golden tensors. Without this noise
+// the synthetic image is suspiciously clean and the DV model — trained
+// on real noisy BAMs — interprets the few clean variant cells as
+// overwhelming evidence (always hom_alt), even on 50% het scenarios.
+const SEQUENCING_ERROR_RATE = 0.007;
+const ACGT: Base[] = ['A', 'C', 'G', 'T'];
+
 function makeRead(
   id: string,
   startCol: number,
@@ -108,6 +117,24 @@ function makeRead(
   const bases: Cell[] = reference.slice(startCol, startCol + length);
   const qualities = qualityProfile(length, 36, rng);
   const strand: Strand = rng() < 0.5 ? 'forward' : 'reverse';
+
+  // Sprinkle realistic sequencing errors. Each base independently has a
+  // small chance of being miscalled (random non-ref base) and gets a
+  // moderate quality (Q15–Q25 — error bases are typically lower-Q).
+  for (let i = 0; i < length; i++) {
+    if (rng() < SEQUENCING_ERROR_RATE) {
+      const ref = bases[i];
+      if (ref !== '-' && ref !== 'N') {
+        let alt: Base;
+        do {
+          alt = ACGT[Math.floor(rng() * 4)];
+        } while (alt === ref);
+        bases[i] = alt;
+        qualities[i] = 15 + Math.floor(rng() * 11);
+      }
+    }
+  }
+
   return {
     id,
     startCol,

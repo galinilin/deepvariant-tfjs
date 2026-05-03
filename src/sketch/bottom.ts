@@ -328,6 +328,17 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
       return;
     }
 
+    // Bias banner: this released DV checkpoint outputs hom_alt 1.0 for
+    // virtually any "real-looking" input (verified on hand-edited real
+    // hom_alt → het tensors via upstream Python Keras). See
+    // drafts/v3.2-prediction-bias.md. Show the prediction but make the
+    // limitation visible.
+    p.fill(180, 130, 90);
+    p.textSize(10);
+    p.textAlign(p.LEFT, p.TOP);
+    p.text('checkpoint biased toward hom_alt — see drafts/', innerLeft, cursorY);
+    cursorY += 20;
+
     // Softmax bars
     const classes: Genotype[] = ['hom_ref', 'het', 'hom_alt'];
     const labelColW = 70;
