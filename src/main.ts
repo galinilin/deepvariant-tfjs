@@ -84,13 +84,8 @@ const worldKind: 'synthetic' | 'real-bam' = realBamRequested ? 'real-bam' : 'syn
 showLoading(topEl, worldKind === 'real-bam' ? 'Loading chr20 reads…' : 'Generating…');
 
 let top: SketchHandle | null = null;
-const bottomHandle = mountBottomSketch(bottomEl); // bottom canvas mounts immediately
-
-// Wire the "Predict anyway" button to bottom-canvas's force override.
-// Bottom canvas controls the button's visibility per frame; main.ts owns
-// the click → forcePredictNow() handoff.
-const predictAnywayBtn = document.getElementById('predict-anyway');
-predictAnywayBtn?.addEventListener('click', () => bottomHandle.forcePredictNow());
+mountBottomSketch(bottomEl); // bottom canvas mounts immediately; it'll
+                              // display "no candidate" until top is ready
 
 (async () => {
   const world =
