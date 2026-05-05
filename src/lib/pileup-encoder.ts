@@ -31,6 +31,15 @@ import {
 
 const SAMPLE_FLOATS = PILEUP_HEIGHT * PILEUP_WIDTH * PILEUP_CHANNELS;
 
+export interface EncodeResult {
+  tensor: Float32Array;
+  /** Per-image-row mapping from the encoder layout (rows 0..99) to the
+   * read.id that occupies that row, or null for ref-rows (0..4) and
+   * empty padding rows. Length is always 100. Used by the bottom canvas
+   * to translate pixel hover (row index) → top canvas read highlight. */
+  rowToReadId: (string | null)[];
+}
+
 /**
  * Encode a DeepVariant 1.8 WGS pileup tensor centered on `position`.
  *
@@ -41,19 +50,21 @@ const SAMPLE_FLOATS = PILEUP_HEIGHT * PILEUP_WIDTH * PILEUP_CHANNELS;
  *
  * Cols span [position - 110, position + 110]; out-of-window cells = 0.
  *
- * Returns a Float32Array of length 100*221*7 = 154,700, ready to feed
- * into `DeepVariantModel.predict()`. Returns null if `candidate` is null
- * (no candidate → no prediction makes sense).
+ * Returns { tensor, rowToReadId }. Tensor is length 100*221*7 = 154,700,
+ * ready to feed into `DeepVariantModel.predict()` (after `(x-128)/128`
+ * normalization on the consumer side). Returns null if `candidate` is
+ * null (no candidate → no prediction makes sense).
  */
 export function encodePileup(
   reads: Read[],
   reference: Base[],
   position: number,
   candidate: Candidate,
-): Float32Array | null {
+): EncodeResult | null {
   if (!candidate) return null;
 
   const out = new Float32Array(SAMPLE_FLOATS);
+  const rowToReadId: (string | null)[] = new Array(PILEUP_HEIGHT).fill(null);
   // Float32Array is zero-initialized, so empty cells already have 0 across all
   // channels — we only need to write the non-empty cells.
 
@@ -94,6 +105,7 @@ export function encodePileup(
   for (let idx = 0; idx < overlapping.length; idx++) {
     const read = overlapping[idx];
     const imageRow = REF_ROWS + idx;
+    rowToReadId[imageRow] = read.id;
     const supportsRow = readSupportsCandidate(read, position, candidate)
       ? SUPPORTS_VARIANT_YES
       : SUPPORTS_VARIANT_NO;
@@ -145,7 +157,7 @@ export function encodePileup(
     }
   }
 
-  return out;
+  return { tensor: out, rowToReadId };
 }
 
 function passesImageFilter(read: Read, position: number): boolean {

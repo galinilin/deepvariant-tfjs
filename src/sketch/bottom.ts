@@ -44,6 +44,8 @@ interface CachedPrediction {
   probs: [number, number, number];
   argmax: Genotype;
   channelImages: p5.Image[]; // 7 grayscale strips
+  /** Image-row → read.id, for hover-pixel → read translation. */
+  rowToReadId: (string | null)[];
 }
 
 // v5.4 — per-frame tween of probability bars + argmax color. Uses
@@ -69,6 +71,16 @@ export function mountBottomSketch(
   let cached: CachedPrediction | null = null;
   let pendingTimer: number | null = null;
   let pendingTarget: { pos: number; generation: number; candidateKey: string } | null = null;
+
+  // v6.0: which channel is rendered large in the right pane. Click any
+  // name in the left list to lock a different one. Default = read_base.
+  let activeChannel = 0;
+  // Layout of the active-channel image (in canvas coords) — used by
+  // mouse hover to translate (mx, my) → (col, row) in the 100×221 tensor.
+  const activeChannelBox = { x: 0, y: 0, w: 0, h: 0 };
+  // Hit-test rects for each channel name in the left list. Updated each
+  // draw frame; consumed by p.mousePressed.
+  const channelNameRects: Array<{ x: number; y: number; w: number; h: number }> = [];
 
   // Animated display state — tweens toward `cached` each frame so bars
   // grow/shrink + amber crossfades smoothly between predictions.
@@ -155,6 +167,36 @@ export function mountBottomSketch(
       p.resizeCanvas(w, h);
     };
 
+    // v6.0: click anywhere on the channel-name list to lock that
+    // channel as the active rendering. Hit-test against rects laid
+    // out in drawPileupPanel each frame.
+    p.mousePressed = () => {
+      const mx = p.mouseX;
+      const my = p.mouseY;
+      for (let i = 0; i < channelNameRects.length; i++) {
+        const r = channelNameRects[i];
+        if (mx >= r.x && mx < r.x + r.w && my >= r.y && my < r.y + r.h) {
+          if (activeChannel !== i) {
+            activeChannel = i;
+            sandboxState.hover = null; // reset hover when switching channel
+          }
+          return;
+        }
+      }
+    };
+
+    // v6.0: hovering a pixel inside the active channel image writes a
+    // hover record to sandboxState. The top canvas reads it and renders
+    // a column highlight + read outline.
+    p.mouseMoved = () => updateHoverFromMouse(p.mouseX, p.mouseY);
+    p.mouseDragged = () => updateHoverFromMouse(p.mouseX, p.mouseY);
+
+    // Clearing on mouse-out can't happen via the p5 hook (no leave event
+    // — the canvas only fires when the mouse is INSIDE). Wire it via DOM.
+    container.addEventListener('mouseleave', () => {
+      sandboxState.hover = null;
+    });
+
     p.draw = () => {
       p.background(0);
 
@@ -181,7 +223,7 @@ export function mountBottomSketch(
 
       const innerW = p.width - MARGIN * 2 - GAP;
       const innerH = p.height - MARGIN * 2;
-      const leftW = Math.round(innerW * 0.72);
+      const leftW = Math.round(innerW * 0.62);
       const rightW = innerW - leftW;
 
       drawPileupPanel(p, MARGIN, MARGIN, leftW, innerH);
@@ -234,8 +276,10 @@ export function mountBottomSketch(
       return;
     }
 
-    const tensor = encodePileup(reads, reference, pos, c);
-    if (!tensor) return;
+    const encoded = encodePileup(reads, reference, pos, c);
+    if (!encoded) return;
+    const tensor = encoded.tensor;
+    const rowToReadId = encoded.rowToReadId;
 
     // DV preprocessing: the network was trained on (uint8_pixel - 128) / 128
     // in [-1, 1]. Source: dv-tfjs/scripts/convert.py + deepvariant/dv_utils.py.
@@ -264,6 +308,7 @@ export function mountBottomSketch(
         probs,
         argmax: result.argmax,
         channelImages,
+        rowToReadId,
       };
     } catch (err) {
       modelError = err instanceof Error ? err.message : 'predict failed';
@@ -281,66 +326,112 @@ export function mountBottomSketch(
   ): void {
     drawPanelChrome(p, x, y, w, h, 'Pileup Image');
 
+    // v6.0 — 1:3 channel selector layout. Left ~25% column lists the 7
+    // channel names (clickable); right ~75% renders only the locked
+    // active channel large, so the user can actually study it.
+    const innerTop = y + HEADER_HEIGHT;
+    const innerBottom = y + h - 6;
+    const innerLeft = x + 12;
+    const innerRight = x + w - 12;
+    const innerWidth = innerRight - innerLeft;
+    const listW = Math.round(innerWidth * 0.26);
+    const gap = 12;
+    const activeX = innerLeft + listW + gap;
+    const activeW = innerRight - activeX;
+    const activeH = innerBottom - innerTop;
+    activeChannelBox.x = activeX;
+    activeChannelBox.y = innerTop;
+    activeChannelBox.w = activeW;
+    activeChannelBox.h = activeH;
+
+    // --- left: clickable channel-name list ---
+    channelNameRects.length = 0;
+    const rowH = Math.max(22, Math.floor(activeH / N_CHANNELS));
+    const listTop = innerTop + Math.max(0, (activeH - rowH * N_CHANNELS) / 2);
+    p.textAlign(p.LEFT, p.CENTER);
+    p.textSize(13);
+    for (let ch = 0; ch < N_CHANNELS; ch++) {
+      const rowY = listTop + ch * rowH;
+      const isActive = ch === activeChannel;
+      const rowRect = { x: innerLeft, y: rowY, w: listW, h: rowH };
+      channelNameRects.push(rowRect);
+
+      // Active-row marker (▶) + amber text; non-active rows in muted gray.
+      p.noStroke();
+      if (isActive) {
+        p.fill(AMBER[0], AMBER[1], AMBER[2]);
+        p.text('▶', innerLeft, rowY + rowH / 2);
+        p.fill(AMBER[0], AMBER[1], AMBER[2]);
+      } else {
+        p.fill(MUTED_COLOR[0], MUTED_COLOR[1], MUTED_COLOR[2]);
+      }
+      p.text(CHANNEL_NAMES[ch], innerLeft + 16, rowY + rowH / 2);
+    }
+
+    // --- right: active channel rendered big ---
     const c = sandboxState.candidate;
     if (!c) {
-      drawCenteredText(p, x, y, w, h, 'no candidate', PLACEHOLDER_COLOR, 13);
+      drawCenteredText(p, activeX, innerTop, activeW, activeH, 'no candidate', PLACEHOLDER_COLOR, 14);
       return;
     }
-
     if (modelError) {
-      drawCenteredText(
-        p,
-        x,
-        y,
-        w,
-        h,
-        `model error: ${modelError}`,
-        [200, 100, 100],
-        12,
-      );
+      drawCenteredText(p, activeX, innerTop, activeW, activeH,
+        `model error: ${modelError}`, [200, 100, 100], 13);
+      return;
+    }
+    if (!cached) {
+      drawCenteredText(p, activeX, innerTop, activeW, activeH, 'predicting…', PLACEHOLDER_COLOR, 13);
       return;
     }
 
-    if (!cached || cached.candidateKey !== candidateKey()) {
-      drawCenteredText(
-        p,
-        x,
-        y,
-        w,
-        h,
-        'predicting…',
-        PLACEHOLDER_COLOR,
-        12,
-      );
-      return;
-    }
+    // The image rendered may be from a stale prediction (current candidate
+    // changed but new predict not yet complete). The bars panel surfaces
+    // 'predicting…' as a subtitle; here we just render whatever's in
+    // cached without ceremony.
+    p.image(cached.channelImages[activeChannel], activeX, innerTop, activeW, activeH);
 
-    // 7 channel strips stacked vertically
-    const stripsTop = y + HEADER_HEIGHT;
-    const stripsBottom = y + h - 6;
-    const labelW = 130;
-    const stripsLeft = x + 12 + labelW;
-    const stripsRight = x + w - 12;
-    const stripsWidth = stripsRight - stripsLeft;
-    const totalGap = 4 * (N_CHANNELS - 1);
-    const stripH = Math.max(
-      14,
-      Math.floor((stripsBottom - stripsTop - totalGap) / N_CHANNELS),
-    );
-
-    p.textSize(11);
+    // Frame the image.
+    p.noFill();
+    p.stroke(BORDER_COLOR[0], BORDER_COLOR[1], BORDER_COLOR[2]);
+    p.strokeWeight(0.5);
+    p.rect(activeX, innerTop, activeW, activeH);
     p.noStroke();
-    for (let ch = 0; ch < N_CHANNELS; ch++) {
-      const stripY = stripsTop + ch * (stripH + 4);
-      p.fill(MUTED_COLOR[0], MUTED_COLOR[1], MUTED_COLOR[2]);
-      p.textAlign(p.RIGHT, p.CENTER);
-      p.text(CHANNEL_NAMES[ch], stripsLeft - 8, stripY + stripH / 2);
-      p.image(cached.channelImages[ch], stripsLeft, stripY, stripsWidth, stripH);
-      p.noFill();
-      p.stroke(BORDER_COLOR[0], BORDER_COLOR[1], BORDER_COLOR[2]);
-      p.strokeWeight(0.5);
-      p.rect(stripsLeft, stripY, stripsWidth, stripH);
-      p.noStroke();
+
+    // Hover info — shown below the image when the mouse is inside the
+    // active channel area. Replaces the static "100×221 cells" caption
+    // when hovering, otherwise falls back to it.
+    p.fill(MUTED_COLOR[0], MUTED_COLOR[1], MUTED_COLOR[2]);
+    p.textSize(11);
+    p.textAlign(p.LEFT, p.BOTTOM);
+    const hover = sandboxState.hover;
+    let footer: string;
+    if (hover && hover.channel === activeChannel) {
+      const rowLabel = hover.imageRow < 5 ? `ref row ${hover.imageRow}` :
+        hover.readId ? `read ${hover.readId.slice(-12)}` :
+        `empty row ${hover.imageRow}`;
+      footer = `pos ${hover.genomicPos + 1}  ·  ${rowLabel}  ·  ${CHANNEL_NAMES[activeChannel]}=${hover.cellValue}`;
+    } else {
+      footer = `${CHANNEL_NAMES[activeChannel]} · 100×221 cells · 0..254`;
+    }
+    p.text(footer, activeX, innerTop + activeH - 4);
+    p.textAlign(p.LEFT, p.CENTER);
+
+    // Subtle crosshair on the image at the hovered (col, row).
+    if (hover && hover.channel === activeChannel) {
+      const cellW = activeW / TENSOR_W;
+      const cellH = activeH / TENSOR_H;
+      // Map back from genomicPos → col (0..220 in current window).
+      const pos = sandboxState.predictPos ?? 0;
+      const col = hover.genomicPos - (pos - 110);
+      if (col >= 0 && col < TENSOR_W) {
+        const cx = activeX + col * cellW;
+        const cy = innerTop + hover.imageRow * cellH;
+        p.noFill();
+        p.stroke(AMBER[0], AMBER[1], AMBER[2], 200);
+        p.strokeWeight(1);
+        p.rect(cx, cy, Math.max(1, cellW), Math.max(1, cellH));
+        p.noStroke();
+      }
     }
   }
 
@@ -364,21 +455,24 @@ export function mountBottomSketch(
     const innerRight = x + w - 12;
     const innerW = innerRight - innerLeft;
 
-    // Variant header
+    // Variant header — sized up in v6.0 so the call is unambiguous at
+    // a glance. Roughly 1.7× the previous sizes.
     const altLabel = formatAlt(c);
     p.noStroke();
     p.fill(LABEL_COLOR[0], LABEL_COLOR[1], LABEL_COLOR[2]);
-    p.textSize(13);
+    p.textSize(22);
+    p.textStyle(p.BOLD);
     p.textAlign(p.LEFT, p.TOP);
     p.text(`${c.refBase}→${altLabel}`, innerLeft, cursorY);
+    p.textStyle(p.NORMAL);
     p.fill(MUTED_COLOR[0], MUTED_COLOR[1], MUTED_COLOR[2]);
-    p.textSize(11);
+    p.textSize(13);
     p.text(
       `support ${c.supportingReads}/${c.qualifyingReads}`,
       innerLeft,
-      cursorY + 18,
+      cursorY + 28,
     );
-    cursorY += 40;
+    cursorY += 56;
 
     if (modelError) {
       drawCenteredText(
@@ -418,20 +512,20 @@ export function mountBottomSketch(
     const isStale = cached.candidateKey !== candidateKey();
     if (isStale) {
       p.fill(PLACEHOLDER_COLOR[0], PLACEHOLDER_COLOR[1], PLACEHOLDER_COLOR[2]);
-      p.textSize(10);
+      p.textSize(12);
       p.textAlign(p.LEFT, p.TOP);
-      p.text('predicting…', innerLeft, cursorY - 14);
+      p.text('predicting…', innerLeft, cursorY - 18);
     }
 
     // Softmax bars — values + colors come from animState (lerped each
     // frame toward `cached`). Pulse on the bar that's most amber-like.
     const classes: Genotype[] = ['hom_ref', 'het', 'hom_alt'];
-    const labelColW = 70;
-    const valueColW = 60;
+    const labelColW = 96;
+    const valueColW = 84;
     const barX = innerLeft + labelColW;
     const barW = innerW - labelColW - valueColW;
-    const barH = 14;
-    const rowH = 28;
+    const barH = 22;
+    const rowH = 38;
     const now = performance.now();
     // Subtle "alive" pulse on the argmax bar: alpha 0.92 ↔ 1.00 over
     // 1.8 s. Non-argmax bars stay at full alpha.
@@ -451,7 +545,7 @@ export function mountBottomSketch(
         amberness,
       );
       p.fill(labelColor[0], labelColor[1], labelColor[2]);
-      p.textSize(12);
+      p.textSize(16);
       p.textAlign(p.LEFT, p.CENTER);
       p.text(cls, innerLeft, cursorY + barH / 2);
 
@@ -484,12 +578,56 @@ export function mountBottomSketch(
 
       // Probability value — amber-tinted + larger when this is the argmax.
       p.fill(labelColor[0], labelColor[1], labelColor[2]);
-      p.textSize(amberness > 0.5 ? 13 : 12);
+      p.textSize(amberness > 0.5 ? 19 : 16);
       p.textAlign(p.RIGHT, p.CENTER);
       p.text(prob.toFixed(3), innerRight, cursorY + barH / 2);
 
       cursorY += rowH;
     }
+  }
+
+  function updateHoverFromMouse(mx: number, my: number): void {
+    const box = activeChannelBox;
+    const inside =
+      box.w > 0 &&
+      box.h > 0 &&
+      mx >= box.x &&
+      mx < box.x + box.w &&
+      my >= box.y &&
+      my < box.y + box.h &&
+      cached !== null &&
+      sandboxState.predictPos !== null;
+    if (!inside) {
+      if (sandboxState.hover !== null) sandboxState.hover = null;
+      return;
+    }
+    const pos = sandboxState.predictPos as number;
+    // Map (mx, my) → (col 0..220, row 0..99)
+    const col = Math.max(0, Math.min(TENSOR_W - 1,
+      Math.floor(((mx - box.x) / box.w) * TENSOR_W)));
+    const row = Math.max(0, Math.min(TENSOR_H - 1,
+      Math.floor(((my - box.y) / box.h) * TENSOR_H)));
+    const genomicPos = pos - 110 + col;
+    const readId = (cached as CachedPrediction).rowToReadId[row] ?? null;
+    // Tensor cell value at (row, col, activeChannel)
+    const tensorIdx = (row * TENSOR_W + col) * N_CHANNELS + activeChannel;
+    // Channel images carry the tensor values in their R-channel; use the
+    // pixel as a cheap read-back. (Storing the tensor itself in cached
+    // would be cleaner but doubles memory; live-read is fine.)
+    const img = (cached as CachedPrediction).channelImages[activeChannel];
+    let cellValue = 0;
+    img.loadPixels();
+    if (img.pixels && tensorIdx >= 0) {
+      const pix = (row * TENSOR_W + col) * 4;
+      cellValue = img.pixels[pix] ?? 0;
+    }
+    sandboxState.hover = {
+      genomicPos,
+      imageRow: row,
+      readId,
+      cellValue,
+      channel: activeChannel,
+    };
   }
 
   function lerp3(

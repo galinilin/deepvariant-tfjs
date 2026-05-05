@@ -21,12 +21,13 @@ import { mountDebugModal } from './sketch/debug-modal';
     if (!sandboxState.reads || !sandboxState.reference || sandboxState.predictPos === null || !sandboxState.candidate) {
       return null;
     }
-    return encodePileup(
+    const enc = encodePileup(
       sandboxState.reads,
       sandboxState.reference,
       sandboxState.predictPos,
       sandboxState.candidate,
     );
+    return enc?.tensor ?? null;
   },
   validate: () => {
     const t = (globalThis as unknown as { dvDebug: { encode: () => Float32Array | null } }).dvDebug.encode();

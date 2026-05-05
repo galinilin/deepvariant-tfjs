@@ -315,6 +315,47 @@ export function mountTopSketch(container: HTMLElement, initialWorld: World): Ske
       );
     };
 
+    // v6.0: when the user hovers a pixel in the bottom canvas's active
+    // channel, sandboxState.hover carries the (genomicPos, readId)
+    // pair. Render a soft amber column highlight at the genomic
+    // position and outline the matching read (if any) so the link
+    // between channel pixel and underlying read is obvious.
+    const drawChannelHover = () => {
+      const hover = sandboxState.hover;
+      if (!hover) return;
+      // Column → x in world coords. The reads cache + ref strip both
+      // span [windowStart, windowStart + WINDOW_LENGTH). Outside that
+      // range we don't draw (off-screen).
+      const colInWindow = hover.genomicPos - windowStart;
+      if (colInWindow < 0 || colInWindow >= WINDOW_LENGTH) return;
+      const x = refOrigin.x + colInWindow * CELL_W + CELL_W / 2;
+      const top = refOrigin.y - 2;
+      const bottom = readsOrigin.y + readsHeight + 2;
+      // Vertical column line through Ref + Reads.
+      p.stroke(255, 220, 110, 180);
+      p.strokeWeight(1.2 / cam.zoom);
+      p.line(x, top, x, bottom);
+      p.noStroke();
+
+      // Read outline — bracket the matched read across its full span.
+      if (hover.readId) {
+        for (const read of reads) {
+          if (read.id !== hover.readId) continue;
+          if (read.row >= MAX_PACKED_ROWS) break;
+          const rx = readsOrigin.x + read.startCol * CELL_W;
+          const ry = readsOrigin.y + read.row * READ_ROW_H;
+          const rw = read.bases.length * CELL_W;
+          const rh = READ_ROW_H;
+          p.noFill();
+          p.stroke(255, 220, 110, 220);
+          p.strokeWeight(1 / cam.zoom);
+          p.rect(rx, ry, rw, rh);
+          p.noStroke();
+          break;
+        }
+      }
+    };
+
     const drawSupportsMarkers = (candidate: Candidate, predictPos: number) => {
       if (!candidate) return;
       const dotX = refOrigin.x + Math.floor(WINDOW_LENGTH / 2) * CELL_W + CELL_W / 2;
@@ -466,6 +507,7 @@ export function mountTopSketch(container: HTMLElement, initialWorld: World): Ske
       drawSupportsMarkers(candidate, predictPos);
       drawPredictMarker();
       drawPredictLabel(predictX, outcome);
+      drawChannelHover();
 
       p.pop();
     };

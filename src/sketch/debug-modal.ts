@@ -144,8 +144,11 @@ export function mountDebugModal(): void {
     let tensor: Float32Array | null = null;
     let report: ValidationReport | null = null;
     if (c && reads && reference && pos !== null) {
-      tensor = encodePileup(reads, reference, pos, c);
-      if (tensor) report = validateEncodedTensor(tensor);
+      const encoded = encodePileup(reads, reference, pos, c);
+      if (encoded) {
+        tensor = encoded.tensor;
+        report = validateEncodedTensor(tensor);
+      }
     }
 
     const candidateLabel = c
