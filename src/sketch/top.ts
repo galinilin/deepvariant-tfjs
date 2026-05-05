@@ -337,14 +337,25 @@ export function mountTopSketch(container: HTMLElement, initialWorld: World): Ske
       p.line(x, top, x, bottom);
       p.noStroke();
 
-      // Read outline — bracket the matched read across its full span.
+      // Read outline — bracket the matched read. The reads cache is
+      // rendered as the [windowStart, windowStart+WINDOW_LENGTH) slice
+      // into [readsOrigin.x, readsOrigin.x+refWidth], so display-space
+      // x = readsOrigin.x + (read.startCol - windowStart) * CELL_W.
+      // Clip to the visible window so reads partially off-screen draw
+      // a tight outline against just the visible portion.
       if (hover.readId) {
+        const winLeftX = readsOrigin.x;
+        const winRightX = readsOrigin.x + WINDOW_LENGTH * CELL_W;
         for (const read of reads) {
           if (read.id !== hover.readId) continue;
           if (read.row >= MAX_PACKED_ROWS) break;
-          const rx = readsOrigin.x + read.startCol * CELL_W;
+          const rxRaw = readsOrigin.x + (read.startCol - windowStart) * CELL_W;
+          const rwRaw = read.bases.length * CELL_W;
+          const rx = Math.max(rxRaw, winLeftX);
+          const rRight = Math.min(rxRaw + rwRaw, winRightX);
+          const rw = rRight - rx;
+          if (rw <= 0) break;
           const ry = readsOrigin.y + read.row * READ_ROW_H;
-          const rw = read.bases.length * CELL_W;
           const rh = READ_ROW_H;
           p.noFill();
           p.stroke(255, 220, 110, 220);
