@@ -156,26 +156,18 @@ export function mountTopSketch(container: HTMLElement, initialWorld: World): Ske
       hover: import('../lib/sandbox-state').ChannelHover,
       baseZoom: number,
     ): { x: number; y: number; zoom: number } | null => {
+      // Only auto-focus when there's a specific read to focus on. Off-
+      // coverage cells (hover.readId === null) leave the camera frozen
+      // — without this guard we'd fall back to "reads region center"
+      // which feels arbitrary.
+      if (!hover.readId) return null;
       const colInWindow = hover.genomicPos - windowStart;
       if (colInWindow < 0 || colInWindow >= WINDOW_LENGTH) return null;
+      const r = reads.find((rd) => rd.id === hover.readId);
+      if (!r || r.row >= MAX_PACKED_ROWS) return null;
       const wx = refOrigin.x + colInWindow * CELL_W + CELL_W / 2;
-      let wy: number;
-      if (hover.imageRow < 5) {
-        wy = refOrigin.y + CELL_H / 2;
-      } else if (hover.readId) {
-        const r = reads.find((rd) => rd.id === hover.readId);
-        if (!r || r.row >= MAX_PACKED_ROWS) {
-          wy = readsOrigin.y + readsHeight / 2;
-        } else {
-          wy = readsOrigin.y + r.row * READ_ROW_H + READ_ROW_H / 2;
-        }
-      } else {
-        wy = readsOrigin.y + readsHeight / 2;
-      }
-      const targetZoom = Math.min(
-        cam.maxZoom,
-        baseZoom * HOVER_ZOOM_FACTOR,
-      );
+      const wy = readsOrigin.y + r.row * READ_ROW_H + READ_ROW_H / 2;
+      const targetZoom = Math.min(cam.maxZoom, baseZoom * HOVER_ZOOM_FACTOR);
       return {
         x: p.width / 2 - wx * targetZoom,
         y: p.height / 2 - wy * targetZoom,

@@ -475,10 +475,12 @@ export function mountBottomSketch(
     const hover = sandboxState.hover;
     let footer: string;
     if (hover && hover.channel === activeChannel) {
-      // Cropped view shows only read rows, so this is always a read.
+      // Cropped view shows only read rows, so this is always a read row.
+      // readId == null here means the row's read doesn't cover this column
+      // (off-coverage cell — the dark padding on either side of the read).
       const rowLabel = hover.readId
         ? `read ${hover.readId.slice(-12)}`
-        : `row ${hover.imageRow}`;
+        : `(no read at this column)`;
       footer = `pos ${hover.genomicPos + 1}  ·  ${rowLabel}  ·  ${CHANNEL_NAMES[activeChannel]}=${hover.cellValue}`;
     } else {
       const visibleRows = activeChannelBox.visibleRowCount;
@@ -687,7 +689,30 @@ export function mountBottomSketch(
       Math.floor(((my - box.y) / box.h) * box.visibleRowCount)));
     const row = box.firstEncoderRow + displayedRow;
     const genomicPos = pos - 110 + col;
-    const readId = (cached as CachedPrediction).rowToReadId[row] ?? null;
+
+    // Coverage check: rowToReadId[row] tells us which read sits in
+    // image-row N, but it doesn't say whether that read covers the
+    // specific column we're hovering. A read R that's 100 bp long at
+    // image-row 5 occupies row 5 entirely, but only fills 100 of the
+    // 221 cells. The other 121 cells are off-coverage (zero across all
+    // 7 channels) — semantically there is no read AT THAT PIXEL even
+    // though the row carries one. Without this check, hovering a dark
+    // off-coverage cell would light up the wrong read's outline on
+    // the top canvas.
+    let readId: string | null = (cached as CachedPrediction).rowToReadId[row] ?? null;
+    if (readId !== null && sandboxState.reads) {
+      const read = sandboxState.reads.find((r) => r.id === readId);
+      if (read) {
+        const offset = genomicPos - read.startCol;
+        if (offset < 0 || offset >= read.bases.length) {
+          // Off-coverage — null out so the top canvas doesn't outline
+          // a read that isn't actually at this cell.
+          readId = null;
+        }
+      } else {
+        readId = null;
+      }
+    }
     // Tensor cell value at (row, col, activeChannel)
     const tensorIdx = (row * TENSOR_W + col) * N_CHANNELS + activeChannel;
     // Channel images carry the tensor values in their R-channel; use the
