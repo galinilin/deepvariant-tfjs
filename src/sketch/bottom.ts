@@ -286,7 +286,7 @@ export function mountBottomSketch(
       return;
     }
 
-    const encoded = encodePileup(reads, reference, pos, c);
+    const encoded = encodePileup(reads, reference, pos, c, sandboxState.rowSort);
     if (!encoded) return;
     const tensor = encoded.tensor;
     const rowToReadId = encoded.rowToReadId;

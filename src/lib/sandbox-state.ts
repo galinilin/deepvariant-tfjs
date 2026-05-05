@@ -43,6 +43,21 @@ export const sandboxState: {
    * highlights (outline + column line + crosshair) but the camera
    * doesn't move. Toggled by the corner "Auto-focus" button. */
   autoFocus: boolean;
+  /** How the encoder orders read rows in the 100×221 image.
+   *
+   *   'igv-aligned' (default): sort by (IGV-pack-row, startCol). Each
+   *     IGV row's reads land contiguously in the encoder image, so
+   *     encoder-row N visually corresponds to top-canvas IGV-row N-5
+   *     (subject to filtering). Friendlier hover correspondence.
+   *
+   *   'dv-style': sort by (startCol, id) globally. Matches DV's
+   *     production sort (modulo haplotype tags we don't carry) and
+   *     produces the diagonal "top-left to bottom-right" stripe seen
+   *     in DV's blog images. The model output is essentially identical
+   *     either way (InceptionV3 is row-order robust) — this is purely
+   *     a visualization choice.
+   */
+  rowSort: 'igv-aligned' | 'dv-style';
 } = {
   candidate: null,
   reads: null,
@@ -51,4 +66,5 @@ export const sandboxState: {
   readsGeneration: 0,
   hover: null,
   autoFocus: true,
+  rowSort: 'igv-aligned',
 };

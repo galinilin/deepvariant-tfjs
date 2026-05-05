@@ -241,6 +241,26 @@ function attachUiHandlers(handle: SketchHandle): void {
     updateAutoFocusBtn();
   });
 
+  // Row-sort toggle — IGV (top-canvas-aligned, default) vs DV
+  // (matches DV's diagonal layout from the blog).
+  const rowSortBtn = document.getElementById('toggle-rowsort');
+  const updateRowSortBtn = (): void => {
+    if (!rowSortBtn) return;
+    rowSortBtn.textContent = `Row sort: ${sandboxState.rowSort === 'dv-style' ? 'DV' : 'IGV'}`;
+  };
+  updateRowSortBtn();
+  rowSortBtn?.addEventListener('click', () => {
+    sandboxState.rowSort =
+      sandboxState.rowSort === 'igv-aligned' ? 'dv-style' : 'igv-aligned';
+    // Bump readsGeneration so the bottom canvas's predict cache
+    // invalidates and re-encodes with the new sort. The model output
+    // will be ~identical (row-order robust) but the channel images
+    // will reorganize.
+    sandboxState.readsGeneration += 1;
+    sandboxState.hover = null;
+    updateRowSortBtn();
+  });
+
   // Keyboard navigation: ←/→ for candidate stepping, 'r' for re-roll.
   // Skip when the user is typing in an input.
   window.addEventListener('keydown', (ev) => {

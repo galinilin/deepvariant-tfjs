@@ -41,6 +41,23 @@ export interface EncodeResult {
 }
 
 /**
+ * How read rows are sorted before being slotted into encoder rows 5..99.
+ *
+ *   'igv-aligned': (read.row, startCol) — encoder row contiguous-aligned
+ *                  with the top canvas IGV pack. Friendlier visual
+ *                  correspondence between bottom and top canvas rows.
+ *
+ *   'dv-style':    (startCol, id) — matches DV's production sort
+ *                  (modulo haplotype tags we don't carry). Produces the
+ *                  diagonal stripe pattern seen in DV's blog images.
+ *
+ * The model output is row-order invariant in practice (InceptionV3 +
+ * GAP), so both sorts give the same predictions — this is purely a
+ * visualization choice.
+ */
+export type RowSort = 'igv-aligned' | 'dv-style';
+
+/**
  * Encode a DeepVariant 1.8 WGS pileup tensor centered on `position`.
  *
  * Layout:
@@ -60,6 +77,7 @@ export function encodePileup(
   reference: Base[],
   position: number,
   candidate: Candidate,
+  rowSort: RowSort = 'igv-aligned',
 ): EncodeResult | null {
   if (!candidate) return null;
 
@@ -99,7 +117,11 @@ export function encodePileup(
   const overlapping = reads
     .filter((r) => r.startCol < startCol + PILEUP_WIDTH && r.startCol + r.bases.length > startCol)
     .filter((r) => passesImageFilter(r, position))
-    .sort((a, b) => a.row - b.row || a.startCol - b.startCol)
+    .sort((a, b) =>
+      rowSort === 'dv-style'
+        ? a.startCol - b.startCol || a.id.localeCompare(b.id)
+        : a.row - b.row || a.startCol - b.startCol,
+    )
     .slice(0, MAX_READ_ROWS);
 
   for (let idx = 0; idx < overlapping.length; idx++) {
