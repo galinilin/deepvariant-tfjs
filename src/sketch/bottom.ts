@@ -411,6 +411,20 @@ export function mountBottomSketch(
     p.rect(activeX, innerTop, activeW, activeH);
     p.noStroke();
 
+    // Predict-column marker — vertical amber line at column 110, the
+    // center of the 221-bp window where the candidate sits. Mirrors
+    // the predict marker on the top canvas so the user sees the
+    // candidate column on both sides. Drawn before the hover crosshair
+    // so the crosshair stays prominent on top when active.
+    {
+      const cellW = activeW / TENSOR_W;
+      const predictX = activeX + 110 * cellW + cellW / 2;
+      p.stroke(AMBER[0], AMBER[1], AMBER[2], 160);
+      p.strokeWeight(1.5);
+      p.line(predictX, innerTop, predictX, innerTop + activeH);
+      p.noStroke();
+    }
+
     // Hover info — shown below the image when the mouse is inside the
     // active channel area. Replaces the static "100×221 cells" caption
     // when hovering, otherwise falls back to it.
