@@ -136,6 +136,89 @@ export function mountTopSketch(container: HTMLElement, initialWorld: World): Ske
       scenarios,
     });
 
+    // v6.0 — when the user hovers a pixel in the bottom canvas's active
+    // channel, the top canvas pans + zooms slightly to center on the
+    // corresponding (column, read row). On unhover the camera lerps back
+    // to whatever state it was in before the hover started. Any direct
+    // user input (pan, zoom, reset) cancels the lock so it doesn't
+    // fight what the user is doing.
+    let savedCam: { x: number; y: number; zoom: number } | null = null;
+    let camLastFrameMs = 0;
+    const HOVER_ZOOM_FACTOR = 1.3;
+    const CAM_TC_MS = 70;
+
+    const releaseSavedCam = (): void => {
+      savedCam = null;
+      camLastFrameMs = 0;
+    };
+
+    const targetCamForHover = (
+      hover: import('../lib/sandbox-state').ChannelHover,
+      baseZoom: number,
+    ): { x: number; y: number; zoom: number } | null => {
+      const colInWindow = hover.genomicPos - windowStart;
+      if (colInWindow < 0 || colInWindow >= WINDOW_LENGTH) return null;
+      const wx = refOrigin.x + colInWindow * CELL_W + CELL_W / 2;
+      let wy: number;
+      if (hover.imageRow < 5) {
+        wy = refOrigin.y + CELL_H / 2;
+      } else if (hover.readId) {
+        const r = reads.find((rd) => rd.id === hover.readId);
+        if (!r || r.row >= MAX_PACKED_ROWS) {
+          wy = readsOrigin.y + readsHeight / 2;
+        } else {
+          wy = readsOrigin.y + r.row * READ_ROW_H + READ_ROW_H / 2;
+        }
+      } else {
+        wy = readsOrigin.y + readsHeight / 2;
+      }
+      const targetZoom = Math.min(
+        cam.maxZoom,
+        baseZoom * HOVER_ZOOM_FACTOR,
+      );
+      return {
+        x: p.width / 2 - wx * targetZoom,
+        y: p.height / 2 - wy * targetZoom,
+        zoom: targetZoom,
+      };
+    };
+
+    const tickCameraForHover = (): void => {
+      const hover = sandboxState.hover;
+      if (hover && savedCam === null) {
+        savedCam = { x: cam.x, y: cam.y, zoom: cam.zoom };
+      }
+      let target: { x: number; y: number; zoom: number } | null = null;
+      if (hover && savedCam) {
+        target = targetCamForHover(hover, savedCam.zoom);
+      } else if (savedCam) {
+        target = savedCam;
+      }
+      if (!target) return;
+
+      const now = performance.now();
+      const dt =
+        camLastFrameMs === 0 ? 16 : Math.min(100, now - camLastFrameMs);
+      camLastFrameMs = now;
+      const alpha = 1 - Math.exp(-dt / CAM_TC_MS);
+      cam.x += (target.x - cam.x) * alpha;
+      cam.y += (target.y - cam.y) * alpha;
+      cam.zoom += (target.zoom - cam.zoom) * alpha;
+
+      if (!hover && savedCam) {
+        if (
+          Math.abs(cam.x - savedCam.x) < 0.5 &&
+          Math.abs(cam.y - savedCam.y) < 0.5 &&
+          Math.abs(cam.zoom - savedCam.zoom) < 0.001
+        ) {
+          cam.x = savedCam.x;
+          cam.y = savedCam.y;
+          cam.zoom = savedCam.zoom;
+          savedCam = null;
+        }
+      }
+    };
+
     const setWindow = (next: number) => {
       const clamped = clampWindowStart(next, reference.length);
       if (clamped === windowStart) return;
@@ -175,6 +258,7 @@ export function mountTopSketch(container: HTMLElement, initialWorld: World): Ske
       const ch = totalHeight * cam.zoom;
       cam.x = (w - cw) / 2;
       cam.y = (h - ch) / 2;
+      releaseSavedCam();
       // On first paint, snap the window to the first candidate so the user
       // immediately sees a real DV-emitted variant. Falls back to centered
       // window if the world has no scenarios.
@@ -467,6 +551,8 @@ export function mountTopSketch(container: HTMLElement, initialWorld: World): Ske
       const predictX =
         refOrigin.x + Math.floor(WINDOW_LENGTH / 2) * CELL_W + CELL_W / 2;
 
+      tickCameraForHover();
+
       p.background(0);
       p.push();
       cam.apply(p);
@@ -539,6 +625,8 @@ export function mountTopSketch(container: HTMLElement, initialWorld: World): Ske
         handleScrubberWorldX(wp.x);
       } else {
         cam.pan(p.movedX, p.movedY);
+        // User taking direct control — release any pending hover lock.
+        releaseSavedCam();
       }
     };
 
@@ -547,6 +635,7 @@ export function mountTopSketch(container: HTMLElement, initialWorld: World): Ske
       event.preventDefault();
       const factor = event.deltaY > 0 ? 0.9 : 1.1;
       cam.zoomAt(p.mouseX, p.mouseY, factor);
+      releaseSavedCam();
     };
   }, container);
 

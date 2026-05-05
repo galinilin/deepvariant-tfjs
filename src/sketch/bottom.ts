@@ -310,6 +310,9 @@ export function mountBottomSketch(
         channelImages,
         rowToReadId,
       };
+      // New prediction → old hover record points at a stale (col, row, read).
+      // Clear it; user's next mousemove will re-populate from the new tensor.
+      sandboxState.hover = null;
     } catch (err) {
       modelError = err instanceof Error ? err.message : 'predict failed';
     } finally {
