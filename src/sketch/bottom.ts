@@ -555,13 +555,13 @@ export function mountBottomSketch(
     p.text(`${c.refBase}→${altLabel}`, innerLeft, cursorY);
     p.textStyle(p.NORMAL);
     p.fill(MUTED_COLOR[0], MUTED_COLOR[1], MUTED_COLOR[2]);
-    p.textSize(13);
+    p.textSize(16);
     p.text(
       `support ${c.supportingReads}/${c.qualifyingReads}`,
       innerLeft,
-      cursorY + 28,
+      cursorY + 30,
     );
-    cursorY += 56;
+    cursorY += 60;
 
     if (modelError) {
       drawCenteredText(
@@ -595,21 +595,17 @@ export function mountBottomSketch(
       return;
     }
 
-    // If cached is stale (a new candidate is in flight), surface a
-    // small subtitle below the variant header but keep the bars rendered
-    // from the animated state.
-    const isStale = cached.candidateKey !== candidateKey();
-    if (isStale) {
-      // Brighter + larger + gentle pulse so the user can see at a
-      // glance that the model is in flight. Sine alpha 0.62→1.00
-      // over 700 ms reads as "thinking" without strobing.
-      const now = performance.now();
-      const pulse = 0.62 + 0.38 * (0.5 + 0.5 * Math.sin((now * 2 * Math.PI) / 700));
-      p.fill(210, 185, 130, 255 * pulse);
-      p.textSize(14);
-      p.textAlign(p.LEFT, p.TOP);
-      p.text('predicting…', innerLeft, cursorY - 22);
-    }
+    // Track staleness. The actual subtitle is rendered AFTER the bars,
+    // centered horizontally below them, so it has visual weight as a
+    // status indicator on the prediction itself rather than a
+    // tiny subtitle near the header.
+    // Must mirror the predict-scheduling logic in p.draw so the subtitle
+    // appears for ALL re-encodes (candidate change AND generation
+    // bumps from Randomize / row-sort toggle).
+    const isStale =
+      cached.candidateKey !== candidateKey() ||
+      cached.generation !== sandboxState.readsGeneration ||
+      (sandboxState.predictPos !== null && cached.pos !== sandboxState.predictPos);
 
     // Softmax bars — values + colors come from animState (lerped each
     // frame toward `cached`). Pulse on the bar that's most amber-like.
@@ -677,6 +673,20 @@ export function mountBottomSketch(
       p.text(prob.toFixed(3), innerRight, cursorY + barH / 2);
 
       cursorY += rowH;
+    }
+
+    // Predicting subtitle, centered horizontally beneath the three bars.
+    // Animated alpha pulse 0.62↔1.00 over 700 ms so it reads as
+    // "thinking" rather than static text.
+    if (isStale) {
+      const now = performance.now();
+      const pulse = 0.62 + 0.38 * (0.5 + 0.5 * Math.sin((now * 2 * Math.PI) / 700));
+      p.fill(210, 185, 130, 255 * pulse);
+      p.textSize(14);
+      p.textStyle(p.NORMAL);
+      p.textAlign(p.CENTER, p.TOP);
+      p.text('predicting…', x + w / 2, cursorY + 6);
+      p.textAlign(p.LEFT, p.CENTER);
     }
   }
 
