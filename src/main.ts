@@ -227,6 +227,20 @@ function attachUiHandlers(handle: SketchHandle): void {
   const nextCandBtn = document.getElementById('next-cand');
   nextCandBtn?.addEventListener('click', () => handle.nextCandidate());
 
+  // Auto-focus toggle — when off, hovering a channel pixel still draws
+  // the highlights but the top camera doesn't move. Initialized from
+  // sandboxState.autoFocus (defaults to true).
+  const autoFocusBtn = document.getElementById('toggle-autofocus');
+  const updateAutoFocusBtn = (): void => {
+    if (!autoFocusBtn) return;
+    autoFocusBtn.textContent = `Auto-focus: ${sandboxState.autoFocus ? 'ON' : 'OFF'}`;
+  };
+  updateAutoFocusBtn();
+  autoFocusBtn?.addEventListener('click', () => {
+    sandboxState.autoFocus = !sandboxState.autoFocus;
+    updateAutoFocusBtn();
+  });
+
   // Keyboard navigation: ←/→ for candidate stepping, 'r' for re-roll.
   // Skip when the user is typing in an input.
   window.addEventListener('keydown', (ev) => {

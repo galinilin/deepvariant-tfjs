@@ -391,7 +391,18 @@ export function mountBottomSketch(
     // changed but new predict not yet complete). The bars panel surfaces
     // 'predicting…' as a subtitle; here we just render whatever's in
     // cached without ceremony.
-    p.image(cached.channelImages[activeChannel], activeX, innerTop, activeW, activeH);
+    //
+    // Disable bilinear smoothing while drawing the channel image. The
+    // source is 100×221 cells of discrete tensor values; default smoothing
+    // bleeds neighboring values together and softens the cell boundaries.
+    // Pixelated upscaling preserves the per-cell encoding.
+    {
+      const ctx = p.drawingContext as CanvasRenderingContext2D;
+      const prevSmoothing = ctx.imageSmoothingEnabled;
+      ctx.imageSmoothingEnabled = false;
+      p.image(cached.channelImages[activeChannel], activeX, innerTop, activeW, activeH);
+      ctx.imageSmoothingEnabled = prevSmoothing;
+    }
 
     // Frame the image.
     p.noFill();

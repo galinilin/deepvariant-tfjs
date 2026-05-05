@@ -184,6 +184,18 @@ export function mountTopSketch(container: HTMLElement, initialWorld: World): Ske
     };
 
     const tickCameraForHover = (): void => {
+      // Toggle off: snap back to saved (if any) and bail. The hover
+      // record can still drive the visual highlights elsewhere.
+      if (!sandboxState.autoFocus) {
+        if (savedCam) {
+          cam.x = savedCam.x;
+          cam.y = savedCam.y;
+          cam.zoom = savedCam.zoom;
+          savedCam = null;
+        }
+        return;
+      }
+
       const hover = sandboxState.hover;
       if (hover && savedCam === null) {
         savedCam = { x: cam.x, y: cam.y, zoom: cam.zoom };

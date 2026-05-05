@@ -37,6 +37,12 @@ export const sandboxState: {
   predictPos: number | null;
   readsGeneration: number;
   hover: ChannelHover | null;
+  /** When true (default), hovering a pixel in the bottom canvas's
+   * active channel pans + zooms the top canvas to center on the
+   * corresponding (column, read row). When false, hover still draws
+   * highlights (outline + column line + crosshair) but the camera
+   * doesn't move. Toggled by the corner "Auto-focus" button. */
+  autoFocus: boolean;
 } = {
   candidate: null,
   reads: null,
@@ -44,4 +50,5 @@ export const sandboxState: {
   predictPos: null,
   readsGeneration: 0,
   hover: null,
+  autoFocus: true,
 };
