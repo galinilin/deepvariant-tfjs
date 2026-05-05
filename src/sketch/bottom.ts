@@ -33,6 +33,7 @@ const CHANNEL_NAMES = [
 
 const TENSOR_W = 221;
 const TENSOR_H = 100;
+const REF_ROWS = 5;
 const N_CHANNELS = 7;
 
 const PREDICT_DEBOUNCE_MS = 220;
@@ -77,7 +78,16 @@ export function mountBottomSketch(
   let activeChannel = 0;
   // Layout of the active-channel image (in canvas coords) — used by
   // mouse hover to translate (mx, my) → (col, row) in the 100×221 tensor.
-  const activeChannelBox = { x: 0, y: 0, w: 0, h: 0 };
+  // visibleRowCount + firstEncoderRow describe the cropped slice
+  // currently rendered (we skip ref rows and trailing empty rows).
+  const activeChannelBox = {
+    x: 0,
+    y: 0,
+    w: 0,
+    h: 0,
+    firstEncoderRow: REF_ROWS,
+    visibleRowCount: TENSOR_H - REF_ROWS,
+  };
   // Hit-test rects for each channel name in the left list. Updated each
   // draw frame; consumed by p.mousePressed.
   const channelNameRects: Array<{ x: number; y: number; w: number; h: number }> = [];
@@ -387,6 +397,30 @@ export function mountBottomSketch(
       return;
     }
 
+    // Crop the rendered slice: skip the 5 ref rows (rows 0..4) and any
+    // empty padding rows beyond the last actually-used encoder row.
+    // The MODEL still ingests all 100 rows — this is a display-only crop.
+    // It just gives the user more pixel area for the rows that actually
+    // carry read information.
+    const lastUsedRow = (() => {
+      for (let i = TENSOR_H - 1; i >= REF_ROWS; i--) {
+        if (cached.rowToReadId[i] !== null) return i;
+      }
+      return REF_ROWS - 1;
+    })();
+    const visibleRowCount = lastUsedRow - REF_ROWS + 1;
+
+    if (visibleRowCount <= 0) {
+      drawCenteredText(p, activeX, innerTop, activeW, activeH,
+        'no qualifying reads at this position', PLACEHOLDER_COLOR, 13);
+      return;
+    }
+
+    // Stash the visible row range in the active-channel-box so the
+    // mouse hover handler maps screen y → encoder row correctly.
+    activeChannelBox.firstEncoderRow = REF_ROWS;
+    activeChannelBox.visibleRowCount = visibleRowCount;
+
     // The image rendered may be from a stale prediction (current candidate
     // changed but new predict not yet complete). The bars panel surfaces
     // 'predicting…' as a subtitle; here we just render whatever's in
@@ -400,7 +434,14 @@ export function mountBottomSketch(
       const ctx = p.drawingContext as CanvasRenderingContext2D;
       const prevSmoothing = ctx.imageSmoothingEnabled;
       ctx.imageSmoothingEnabled = false;
-      p.image(cached.channelImages[activeChannel], activeX, innerTop, activeW, activeH);
+      // 9-arg image() draws a sub-rect of the source at a destination rect.
+      p.image(
+        cached.channelImages[activeChannel],
+        activeX, innerTop,                                // dest pos
+        activeW, activeH,                                 // dest size (stretch to fill)
+        0, REF_ROWS,                                      // source pos (skip ref rows)
+        TENSOR_W, visibleRowCount,                        // source size (drop empty bottom)
+      );
       ctx.imageSmoothingEnabled = prevSmoothing;
     }
 
@@ -434,26 +475,33 @@ export function mountBottomSketch(
     const hover = sandboxState.hover;
     let footer: string;
     if (hover && hover.channel === activeChannel) {
-      const rowLabel = hover.imageRow < 5 ? `ref row ${hover.imageRow}` :
-        hover.readId ? `read ${hover.readId.slice(-12)}` :
-        `empty row ${hover.imageRow}`;
+      // Cropped view shows only read rows, so this is always a read.
+      const rowLabel = hover.readId
+        ? `read ${hover.readId.slice(-12)}`
+        : `row ${hover.imageRow}`;
       footer = `pos ${hover.genomicPos + 1}  ·  ${rowLabel}  ·  ${CHANNEL_NAMES[activeChannel]}=${hover.cellValue}`;
     } else {
-      footer = `${CHANNEL_NAMES[activeChannel]} · 100×221 cells · 0..254`;
+      const visibleRows = activeChannelBox.visibleRowCount;
+      footer = `${CHANNEL_NAMES[activeChannel]} · ${visibleRows} reads × 221 cells (5 ref rows + ${TENSOR_H - REF_ROWS - visibleRows} empty rows hidden)`;
     }
     p.text(footer, activeX, innerTop + activeH - 4);
     p.textAlign(p.LEFT, p.CENTER);
 
-    // Subtle crosshair on the image at the hovered (col, row).
+    // Subtle crosshair on the image at the hovered (col, row). Both
+    // axes use the cropped display: cells are wider than tall now that
+    // we skip ref + empty rows.
     if (hover && hover.channel === activeChannel) {
       const cellW = activeW / TENSOR_W;
-      const cellH = activeH / TENSOR_H;
-      // Map back from genomicPos → col (0..220 in current window).
+      const cellH = activeH / activeChannelBox.visibleRowCount;
       const pos = sandboxState.predictPos ?? 0;
       const col = hover.genomicPos - (pos - 110);
-      if (col >= 0 && col < TENSOR_W) {
+      const displayedRow = hover.imageRow - activeChannelBox.firstEncoderRow;
+      if (
+        col >= 0 && col < TENSOR_W &&
+        displayedRow >= 0 && displayedRow < activeChannelBox.visibleRowCount
+      ) {
         const cx = activeX + col * cellW;
-        const cy = innerTop + hover.imageRow * cellH;
+        const cy = innerTop + displayedRow * cellH;
         p.noFill();
         p.stroke(AMBER[0], AMBER[1], AMBER[2], 200);
         p.strokeWeight(1);
@@ -624,17 +672,20 @@ export function mountBottomSketch(
       my >= box.y &&
       my < box.y + box.h &&
       cached !== null &&
-      sandboxState.predictPos !== null;
+      sandboxState.predictPos !== null &&
+      box.visibleRowCount > 0;
     if (!inside) {
       if (sandboxState.hover !== null) sandboxState.hover = null;
       return;
     }
     const pos = sandboxState.predictPos as number;
-    // Map (mx, my) → (col 0..220, row 0..99)
+    // Map (mx, my) → (col 0..220, displayed_row 0..visibleRowCount-1)
+    // Then shift displayed_row by firstEncoderRow to get encoder row 5..99.
     const col = Math.max(0, Math.min(TENSOR_W - 1,
       Math.floor(((mx - box.x) / box.w) * TENSOR_W)));
-    const row = Math.max(0, Math.min(TENSOR_H - 1,
-      Math.floor(((my - box.y) / box.h) * TENSOR_H)));
+    const displayedRow = Math.max(0, Math.min(box.visibleRowCount - 1,
+      Math.floor(((my - box.y) / box.h) * box.visibleRowCount)));
+    const row = box.firstEncoderRow + displayedRow;
     const genomicPos = pos - 110 + col;
     const readId = (cached as CachedPrediction).rowToReadId[row] ?? null;
     // Tensor cell value at (row, col, activeChannel)
