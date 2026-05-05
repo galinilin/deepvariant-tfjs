@@ -17,6 +17,11 @@ import type { Base } from './palette';
  * to null when mouse leaves the channel image.
  */
 export interface ChannelHover {
+  /** Where the hover originated — used to suppress circular feedback
+   * (e.g. don't auto-pan the top canvas when the user is hovering the
+   * top canvas itself) and to relax channel-match checks for hovers
+   * that don't carry a meaningful channel. */
+  source: 'top' | 'bottom';
   /** Genomic position (column index in the reference) that the user is
    * hovering. The top canvas draws a vertical highlight at this column. */
   genomicPos: number;
@@ -24,9 +29,11 @@ export interface ChannelHover {
   imageRow: number;
   /** read.id at imageRow if any, else null (ref row or empty padding). */
   readId: string | null;
-  /** Tensor cell value at (row, col, channel) for tooltip display. */
+  /** Tensor cell value at (row, col, channel) for tooltip display.
+   * 0 if unknown (e.g. when hover originates from the top canvas). */
   cellValue: number;
-  /** Channel index that's currently active (0..6). */
+  /** Channel index that the cellValue is sampled from, or -1 if unknown
+   * (top-canvas hover doesn't track which channel is active). */
   channel: number;
 }
 
@@ -58,6 +65,10 @@ export const sandboxState: {
    *     a visualization choice.
    */
   rowSort: 'igv-aligned' | 'dv-style';
+  /** Latest encoder row→read.id mapping. Bottom canvas publishes after
+   * each successful predict; top canvas reads it to resolve a read's
+   * encoder row for cross-canvas hover linking. */
+  latestRowToReadId: (string | null)[] | null;
 } = {
   candidate: null,
   reads: null,
@@ -67,4 +78,5 @@ export const sandboxState: {
   hover: null,
   autoFocus: true,
   rowSort: 'igv-aligned',
+  latestRowToReadId: null,
 };

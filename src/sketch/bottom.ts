@@ -320,6 +320,9 @@ export function mountBottomSketch(
         channelImages,
         rowToReadId,
       };
+      // Publish row mapping so the top canvas can resolve hover →
+      // encoder row for cross-canvas hover linking.
+      sandboxState.latestRowToReadId = rowToReadId;
       // New prediction → old hover record points at a stale (col, row, read).
       // Clear it; user's next mousemove will re-populate from the new tensor.
       sandboxState.hover = null;
@@ -351,7 +354,12 @@ export function mountBottomSketch(
     const gap = 12;
     const activeX = innerLeft + listW + gap;
     const activeW = innerRight - activeX;
-    const activeH = innerBottom - innerTop;
+    // Reserve a strip below the image for the footer text. Sized so the
+    // 13-px footer + breathing room sits cleanly outside the image
+    // border.
+    const FOOTER_H = 22;
+    const activeH = innerBottom - innerTop - FOOTER_H;
+    const footerY = innerTop + activeH + 4;
     activeChannelBox.x = activeX;
     activeChannelBox.y = innerTop;
     activeChannelBox.w = activeW;
@@ -393,7 +401,7 @@ export function mountBottomSketch(
       return;
     }
     if (!cached) {
-      drawCenteredText(p, activeX, innerTop, activeW, activeH, 'predicting…', PLACEHOLDER_COLOR, 13);
+      drawCenteredText(p, activeX, innerTop, activeW, activeH, 'predicting…', [210, 185, 130], 16);
       return;
     }
 
@@ -466,33 +474,36 @@ export function mountBottomSketch(
       p.noStroke();
     }
 
-    // Hover info — shown below the image when the mouse is inside the
-    // active channel area. Replaces the static "100×221 cells" caption
-    // when hovering, otherwise falls back to it.
+    // Footer caption — rendered OUTSIDE the image (in the reserved
+    // FOOTER_H strip below it). Sized up so it's readable at a glance.
     p.fill(MUTED_COLOR[0], MUTED_COLOR[1], MUTED_COLOR[2]);
-    p.textSize(11);
-    p.textAlign(p.LEFT, p.BOTTOM);
+    p.textSize(13);
+    p.textAlign(p.LEFT, p.TOP);
     const hover = sandboxState.hover;
     let footer: string;
-    if (hover && hover.channel === activeChannel) {
-      // Cropped view shows only read rows, so this is always a read row.
-      // readId == null here means the row's read doesn't cover this column
-      // (off-coverage cell — the dark padding on either side of the read).
+    if (hover && (hover.source === 'top' || hover.channel === activeChannel)) {
       const rowLabel = hover.readId
         ? `read ${hover.readId.slice(-12)}`
         : `(no read at this column)`;
-      footer = `pos ${hover.genomicPos + 1}  ·  ${rowLabel}  ·  ${CHANNEL_NAMES[activeChannel]}=${hover.cellValue}`;
+      // Top-source hovers don't sample cellValue, so omit the =NN.
+      const channelStr = hover.source === 'top'
+        ? `${CHANNEL_NAMES[activeChannel]}`
+        : `${CHANNEL_NAMES[activeChannel]}=${hover.cellValue}`;
+      footer = `pos ${hover.genomicPos + 1}  ·  ${rowLabel}  ·  ${channelStr}`;
     } else {
       const visibleRows = activeChannelBox.visibleRowCount;
       footer = `${CHANNEL_NAMES[activeChannel]} · ${visibleRows} reads × 221 cells (5 ref rows + ${TENSOR_H - REF_ROWS - visibleRows} empty rows hidden)`;
     }
-    p.text(footer, activeX, innerTop + activeH - 4);
+    p.text(footer, activeX, footerY);
     p.textAlign(p.LEFT, p.CENTER);
 
     // Subtle crosshair on the image at the hovered (col, row). Both
     // axes use the cropped display: cells are wider than tall now that
-    // we skip ref + empty rows.
-    if (hover && hover.channel === activeChannel) {
+    // we skip ref + empty rows. Top-source hovers don't carry a
+    // channel; show the crosshair regardless of which channel is
+    // active in those cases.
+    const showCrosshair = hover && (hover.source === 'top' || hover.channel === activeChannel);
+    if (showCrosshair && hover) {
       const cellW = activeW / TENSOR_W;
       const cellH = activeH / activeChannelBox.visibleRowCount;
       const pos = sandboxState.predictPos ?? 0;
@@ -578,8 +589,8 @@ export function mountBottomSketch(
         w,
         h - (cursorY - y) - 6,
         'predicting…',
-        PLACEHOLDER_COLOR,
-        12,
+        [210, 185, 130],
+        16,
       );
       return;
     }
@@ -589,10 +600,15 @@ export function mountBottomSketch(
     // from the animated state.
     const isStale = cached.candidateKey !== candidateKey();
     if (isStale) {
-      p.fill(PLACEHOLDER_COLOR[0], PLACEHOLDER_COLOR[1], PLACEHOLDER_COLOR[2]);
-      p.textSize(12);
+      // Brighter + larger + gentle pulse so the user can see at a
+      // glance that the model is in flight. Sine alpha 0.62→1.00
+      // over 700 ms reads as "thinking" without strobing.
+      const now = performance.now();
+      const pulse = 0.62 + 0.38 * (0.5 + 0.5 * Math.sin((now * 2 * Math.PI) / 700));
+      p.fill(210, 185, 130, 255 * pulse);
+      p.textSize(14);
       p.textAlign(p.LEFT, p.TOP);
-      p.text('predicting…', innerLeft, cursorY - 18);
+      p.text('predicting…', innerLeft, cursorY - 22);
     }
 
     // Softmax bars — values + colors come from animState (lerped each
@@ -726,6 +742,7 @@ export function mountBottomSketch(
       cellValue = img.pixels[pix] ?? 0;
     }
     sandboxState.hover = {
+      source: 'bottom',
       genomicPos,
       imageRow: row,
       readId,

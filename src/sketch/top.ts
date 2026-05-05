@@ -189,12 +189,16 @@ export function mountTopSketch(container: HTMLElement, initialWorld: World): Ske
       }
 
       const hover = sandboxState.hover;
-      if (hover && savedCam === null) {
+      // Skip auto-focus when the hover came from the top canvas itself.
+      // The user's cursor is already positioned at the read; panning the
+      // camera there would chase the cursor in a circular fashion.
+      const treatedHover = hover && hover.source !== 'top' ? hover : null;
+      if (treatedHover && savedCam === null) {
         savedCam = { x: cam.x, y: cam.y, zoom: cam.zoom };
       }
       let target: { x: number; y: number; zoom: number } | null = null;
-      if (hover && savedCam) {
-        target = targetCamForHover(hover, savedCam.zoom);
+      if (treatedHover && savedCam) {
+        target = targetCamForHover(treatedHover, savedCam.zoom);
       } else if (savedCam) {
         target = savedCam;
       }
@@ -209,7 +213,9 @@ export function mountTopSketch(container: HTMLElement, initialWorld: World): Ske
       cam.y += (target.y - cam.y) * alpha;
       cam.zoom += (target.zoom - cam.zoom) * alpha;
 
-      if (!hover && savedCam) {
+      // Restore saved cam when there's no auto-focus-relevant hover.
+      // (top-source hovers are treated as "no hover" for camera purposes.)
+      if (!treatedHover && savedCam) {
         if (
           Math.abs(cam.x - savedCam.x) < 0.5 &&
           Math.abs(cam.y - savedCam.y) < 0.5 &&

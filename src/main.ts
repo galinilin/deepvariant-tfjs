@@ -292,6 +292,8 @@ if (tooltip) {
     const info = top.hoverInfo(sx, sy);
     if (!info) {
       tooltip.style.display = 'none';
+      // Clear any top-source hover so the bottom canvas crosshair fades.
+      if (sandboxState.hover?.source === 'top') sandboxState.hover = null;
       return;
     }
     tooltip.innerHTML = formatTooltip(info);
@@ -309,9 +311,34 @@ if (tooltip) {
     tooltip.style.left = `${leftPx}px`;
     tooltip.style.top = `${topPx}px`;
     tooltip.style.display = 'block';
+
+    // Mirror the hover into shared state so the bottom canvas can light
+    // up the corresponding (col, row) crosshair on its active channel.
+    // We only write if the hovered read is actually present in the
+    // current encoder image (passed mapq + base-Q filters); otherwise
+    // the linkage doesn't exist on the bottom side.
+    const map = sandboxState.latestRowToReadId;
+    if (map) {
+      const imageRow = map.indexOf(info.readId);
+      if (imageRow >= 0) {
+        sandboxState.hover = {
+          source: 'top',
+          genomicPos: info.absCol,
+          imageRow,
+          readId: info.readId,
+          cellValue: 0, // not sampled from this side
+          channel: -1, // top doesn't track the active channel
+        };
+      } else if (sandboxState.hover?.source === 'top') {
+        // The read is filtered out of the encoder image — clear stale
+        // top-source hover.
+        sandboxState.hover = null;
+      }
+    }
   });
   topEl.addEventListener('mouseleave', () => {
     tooltip.style.display = 'none';
+    if (sandboxState.hover?.source === 'top') sandboxState.hover = null;
   });
 }
 
