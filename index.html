@@ -26,13 +26,27 @@
         height: 100vh;
       }
       #sketch-top {
-        flex: 0 0 66%;
+        flex: 0 0 var(--top-h, 66%);
         position: relative;
+        min-height: 220px;
+      }
+      #splitter {
+        flex: 0 0 6px;
+        background: #1a1a1a;
+        cursor: row-resize;
+        user-select: none;
+        position: relative;
+        z-index: 5;
+        transition: background 0.15s;
+      }
+      #splitter:hover,
+      #splitter.dragging {
+        background: #4a4a4a;
       }
       #sketch-bottom {
-        flex: 1 1 34%;
-        border-top: 1px solid #1a1a1a;
+        flex: 1 1 auto;
         position: relative;
+        min-height: 220px;
       }
       canvas {
         display: block;
@@ -311,6 +325,7 @@
   </head>
   <body>
     <div id="sketch-top" class="hidden-until-ready"></div>
+    <div id="splitter" class="hidden-until-ready" title="Drag to resize"></div>
     <div id="sketch-bottom" class="hidden-until-ready"></div>
     <div class="corner-buttons hidden-until-ready">
       <button id="prev-cand" class="reset-btn" type="button" title="Previous candidate (←)">◀ Prev</button>

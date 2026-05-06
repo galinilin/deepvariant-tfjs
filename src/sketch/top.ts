@@ -75,6 +75,9 @@ export interface SketchHandle {
    * the synthetic Randomize button to regenerate; real-bam mode keeps
    * the loaded fixture for the session. */
   setWorld: (world: World) => void;
+  /** Manually trigger a canvas resize. Called from main.ts after the
+   * vertical splitter is dragged so the canvas matches its container. */
+  resize: () => void;
   destroy: () => void;
 }
 
@@ -84,6 +87,7 @@ const READS_GAP = 18;
 export function mountTopSketch(container: HTMLElement, initialWorld: World): SketchHandle {
   let resetFn: () => void = () => {};
   let randomizeFn: () => void = () => {};
+  let resizeFn: () => void = () => {};
   let nextCandidateFn: () => number = () => -1;
   let prevCandidateFn: () => number = () => -1;
   let setWorldFn: (w: World) => void = () => {};
@@ -543,10 +547,12 @@ export function mountTopSketch(container: HTMLElement, initialWorld: World): Ske
       });
     };
 
-    p.windowResized = () => {
+    const doResize = () => {
       const { w, h } = size();
       p.resizeCanvas(w, h);
     };
+    p.windowResized = doResize;
+    resizeFn = doResize;
 
     p.draw = () => {
       const predictPos = windowStart + Math.floor(WINDOW_LENGTH / 2);
@@ -711,6 +717,7 @@ export function mountTopSketch(container: HTMLElement, initialWorld: World): Ske
     nextCandidate: () => nextCandidateFn(),
     prevCandidate: () => prevCandidateFn(),
     setWorld: (w: World) => setWorldFn(w),
+    resize: () => resizeFn(),
     destroy: () => instance.remove(),
   };
 }

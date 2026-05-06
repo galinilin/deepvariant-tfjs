@@ -1,5 +1,5 @@
 import { mountTopSketch, type HoverInfo, type SketchHandle } from './sketch/top';
-import { mountBottomSketch } from './sketch/bottom';
+import { mountBottomSketch, type BottomHandle } from './sketch/bottom';
 import { formatAlt, type CandidateOutcome } from './lib/candidate';
 import { encodePileup, validateEncodedTensor } from './lib/pileup-encoder';
 import { sandboxState } from './lib/sandbox-state';
@@ -90,6 +90,7 @@ const queryWorld =
       : null;
 
 let top: SketchHandle | null = null;
+let bottom: BottomHandle | null = null;
 let chosenWorldKind: 'synthetic' | 'real-bam' = 'synthetic';
 
 const welcomeEl = document.getElementById('welcome-overlay');
@@ -176,7 +177,7 @@ async function startWorld(kind: 'synthetic' | 'real-bam'): Promise<void> {
     });
 
     top = mountTopSketch(topEl, world);
-    mountBottomSketch(bottomEl, model);
+    bottom = mountBottomSketch(bottomEl, model);
     attachUiHandlers(top);
 
     // Fade out the welcome overlay then remove it.
@@ -195,6 +196,46 @@ async function startWorld(kind: 'synthetic' | 'real-bam'): Promise<void> {
 }
 
 mountDebugModal();
+
+// v6.2 — vertical splitter between top and bottom canvases. Drag the
+// thin bar to resize. The CSS exposes the top height via --top-h on
+// the root; we set it in pixels during drag (clamped to keep both
+// panels usable). After each move we manually trigger each sketch's
+// resize() so p5 re-fits its canvas to the new container size.
+{
+  const splitter = document.getElementById('splitter');
+  if (splitter) {
+    let dragging = false;
+    splitter.addEventListener('mousedown', (ev) => {
+      ev.preventDefault();
+      dragging = true;
+      splitter.classList.add('dragging');
+      document.body.style.cursor = 'row-resize';
+    });
+    window.addEventListener('mousemove', (ev) => {
+      if (!dragging) return;
+      const totalH = window.innerHeight;
+      const splitterH = 6;
+      const minTop = 220;
+      const minBottom = 220;
+      let topH = ev.clientY;
+      topH = Math.max(minTop, Math.min(totalH - splitterH - minBottom, topH));
+      document.documentElement.style.setProperty('--top-h', `${topH}px`);
+      // Resize the canvases on each move so the drag feels live.
+      top?.resize();
+      bottom?.resize();
+    });
+    window.addEventListener('mouseup', () => {
+      if (!dragging) return;
+      dragging = false;
+      splitter.classList.remove('dragging');
+      document.body.style.cursor = '';
+      // One final resize after release in case the last move was clamped.
+      top?.resize();
+      bottom?.resize();
+    });
+  }
+}
 
 /**
  * Randomize semantics:

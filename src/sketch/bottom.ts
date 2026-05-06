@@ -7,6 +7,9 @@ import { recordPrediction } from '../lib/debug-telemetry';
 
 export interface BottomHandle {
   destroy: () => void;
+  /** Manually trigger a canvas resize. Called by main.ts after the
+   * vertical splitter is dragged so the canvas matches its container. */
+  resize: () => void;
 }
 
 const LABEL_COLOR: [number, number, number] = [210, 210, 210];
@@ -68,6 +71,7 @@ export function mountBottomSketch(
   model: DeepVariantModel,
 ): BottomHandle {
   let modelError: string | null = null;
+  let resizeFn: () => void = () => {};
   let predicting = false;
   let cached: CachedPrediction | null = null;
   let pendingTimer: number | null = null;
@@ -181,10 +185,12 @@ export function mountBottomSketch(
       // load here — by the time bottom is mounted, model is ready.
     };
 
-    p.windowResized = () => {
+    const doResize = () => {
       const { w, h } = size();
       p.resizeCanvas(w, h);
     };
+    p.windowResized = doResize;
+    resizeFn = doResize;
 
     // v6.0: click anywhere on the channel-name list to lock that
     // channel as the active rendering. Hit-test against rects laid
@@ -259,7 +265,7 @@ export function mountBottomSketch(
 
       const innerW = p.width - MARGIN * 2 - GAP;
       const innerH = p.height - MARGIN * 2;
-      const leftW = Math.round(innerW * 0.62);
+      const leftW = Math.round(innerW * 0.68);
       const rightW = innerW - leftW;
 
       drawPileupPanel(p, MARGIN, MARGIN, leftW, innerH);
@@ -376,7 +382,7 @@ export function mountBottomSketch(
     const innerLeft = x + 12;
     const innerRight = x + w - 12;
     const innerWidth = innerRight - innerLeft;
-    const listW = Math.round(innerWidth * 0.26);
+    const listW = Math.round(innerWidth * 0.20);
     const gap = 12;
     const activeX = innerLeft + listW + gap;
     const activeW = innerRight - activeX;
@@ -929,5 +935,6 @@ export function mountBottomSketch(
       // Model is owned by main.ts; we don't dispose here.
       instance.remove();
     },
+    resize: () => resizeFn(),
   };
 }
