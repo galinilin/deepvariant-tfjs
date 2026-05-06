@@ -88,6 +88,15 @@ export function mountBottomSketch(
     firstEncoderRow: REF_ROWS,
     visibleRowCount: TENSOR_H - REF_ROWS,
   };
+  // v6.1: clickable toggle rects below the active channel image. Updated
+  // each frame by drawPileupPanel; hit-tested by p.mousePressed.
+  const toggleRects: Array<{
+    kind: 'autofocus' | 'rowsort';
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  }> = [];
   // Hit-test rects for each channel name in the left list. Updated each
   // draw frame; consumed by p.mousePressed.
   const channelNameRects: Array<{ x: number; y: number; w: number; h: number }> = [];
@@ -183,6 +192,23 @@ export function mountBottomSketch(
     p.mousePressed = () => {
       const mx = p.mouseX;
       const my = p.mouseY;
+      // Toggle bar (Auto-focus / Row sort) — checked first so the
+      // toggles take priority over channel-name clicks if their rects
+      // ever overlap (they don't currently).
+      for (const t of toggleRects) {
+        if (mx >= t.x && mx < t.x + t.w && my >= t.y && my < t.y + t.h) {
+          if (t.kind === 'autofocus') {
+            sandboxState.autoFocus = !sandboxState.autoFocus;
+          } else if (t.kind === 'rowsort') {
+            sandboxState.rowSort =
+              sandboxState.rowSort === 'igv-aligned' ? 'dv-style' : 'igv-aligned';
+            // Force a re-encode + re-predict on the new sort.
+            sandboxState.readsGeneration += 1;
+            sandboxState.hover = null;
+          }
+          return;
+        }
+      }
       for (let i = 0; i < channelNameRects.length; i++) {
         const r = channelNameRects[i];
         if (mx >= r.x && mx < r.x + r.w && my >= r.y && my < r.y + r.h) {
@@ -354,12 +380,14 @@ export function mountBottomSketch(
     const gap = 12;
     const activeX = innerLeft + listW + gap;
     const activeW = innerRight - activeX;
-    // Reserve a strip below the image for the footer text. Sized so the
-    // 13-px footer + breathing room sits cleanly outside the image
-    // border.
+    // Reserve strips below the image: a footer text row + a clickable
+    // toggle row for Auto-focus and Row sort. Sized so the 13-px
+    // footer + 14-px toggles sit cleanly outside the image border.
     const FOOTER_H = 22;
-    const activeH = innerBottom - innerTop - FOOTER_H;
+    const TOGGLE_H = 26;
+    const activeH = innerBottom - innerTop - FOOTER_H - TOGGLE_H;
     const footerY = innerTop + activeH + 4;
+    const toggleY = innerTop + activeH + FOOTER_H;
     activeChannelBox.x = activeX;
     activeChannelBox.y = innerTop;
     activeChannelBox.w = activeW;
@@ -496,6 +524,54 @@ export function mountBottomSketch(
     }
     p.text(footer, activeX, footerY);
     p.textAlign(p.LEFT, p.CENTER);
+
+    // Toggle bar — Auto-focus and Row sort, rendered as canvas-native
+    // text toggles. Click anywhere on the label+value text to flip.
+    // Layout: each toggle's clickable rect spans label + value, with a
+    // gap between toggles. Value is amber (active selection cue).
+    toggleRects.length = 0;
+    p.textSize(13);
+    p.textAlign(p.LEFT, p.CENTER);
+    let tx = activeX;
+    const rectH = TOGGLE_H - 4;
+    const rectY = toggleY + (TOGGLE_H - rectH) / 2;
+    const cy = toggleY + TOGGLE_H / 2;
+
+    const drawToggle = (
+      kind: 'autofocus' | 'rowsort',
+      label: string,
+      value: string,
+    ): void => {
+      const labelW = p.textWidth(label);
+      const valueW = p.textWidth(value);
+      // Label in muted gray.
+      p.fill(MUTED_COLOR[0], MUTED_COLOR[1], MUTED_COLOR[2]);
+      p.text(label, tx, cy);
+      // Value in amber to indicate the current selection.
+      p.fill(AMBER[0], AMBER[1], AMBER[2]);
+      p.text(value, tx + labelW, cy);
+      // Hit rect spans the full label+value; small vertical pad for
+      // forgiveness on clicks.
+      toggleRects.push({
+        kind,
+        x: tx - 4,
+        y: rectY,
+        w: labelW + valueW + 8,
+        h: rectH,
+      });
+      tx += labelW + valueW + 28;
+    };
+
+    drawToggle(
+      'autofocus',
+      'Auto-focus: ',
+      sandboxState.autoFocus ? 'ON' : 'OFF',
+    );
+    drawToggle(
+      'rowsort',
+      'Row sort: ',
+      sandboxState.rowSort === 'dv-style' ? 'DV' : 'IGV',
+    );
 
     // Subtle crosshair on the image at the hovered (col, row). Both
     // axes use the cropped display: cells are wider than tall now that

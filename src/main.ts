@@ -227,39 +227,9 @@ function attachUiHandlers(handle: SketchHandle): void {
   const nextCandBtn = document.getElementById('next-cand');
   nextCandBtn?.addEventListener('click', () => handle.nextCandidate());
 
-  // Auto-focus toggle — when off, hovering a channel pixel still draws
-  // the highlights but the top camera doesn't move. Initialized from
-  // sandboxState.autoFocus (defaults to true).
-  const autoFocusBtn = document.getElementById('toggle-autofocus');
-  const updateAutoFocusBtn = (): void => {
-    if (!autoFocusBtn) return;
-    autoFocusBtn.textContent = `Auto-focus: ${sandboxState.autoFocus ? 'ON' : 'OFF'}`;
-  };
-  updateAutoFocusBtn();
-  autoFocusBtn?.addEventListener('click', () => {
-    sandboxState.autoFocus = !sandboxState.autoFocus;
-    updateAutoFocusBtn();
-  });
-
-  // Row-sort toggle — IGV (top-canvas-aligned, default) vs DV
-  // (matches DV's diagonal layout from the blog).
-  const rowSortBtn = document.getElementById('toggle-rowsort');
-  const updateRowSortBtn = (): void => {
-    if (!rowSortBtn) return;
-    rowSortBtn.textContent = `Row sort: ${sandboxState.rowSort === 'dv-style' ? 'DV' : 'IGV'}`;
-  };
-  updateRowSortBtn();
-  rowSortBtn?.addEventListener('click', () => {
-    sandboxState.rowSort =
-      sandboxState.rowSort === 'igv-aligned' ? 'dv-style' : 'igv-aligned';
-    // Bump readsGeneration so the bottom canvas's predict cache
-    // invalidates and re-encodes with the new sort. The model output
-    // will be ~identical (row-order robust) but the channel images
-    // will reorganize.
-    sandboxState.readsGeneration += 1;
-    sandboxState.hover = null;
-    updateRowSortBtn();
-  });
+  // v6.1: Auto-focus and Row sort toggles moved into the bottom canvas
+  // (drawn beneath the active channel image, hit-tested in
+  // bottom.ts mousePressed). HTML buttons removed.
 
   // Keyboard navigation: ←/→ for candidate stepping, 'r' for re-roll.
   // Skip when the user is typing in an input.
