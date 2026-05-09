@@ -15,10 +15,39 @@
       body {
         margin: 0;
         padding: 0;
-        background: #000;
-        color: #ccc;
+        background: #010002;
+        color: #fff;
         font-family: 'Inconsolata', ui-monospace, Menlo, monospace;
         overflow: hidden;
+      }
+      /* v7.1 — fixed top-right link, mirrored from
+         galinilin/artificialneural.network. Sits above everything,
+         including the welcome overlay, so the source link is reachable
+         from any screen. */
+      .top-links {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 300;
+        display: flex;
+        gap: 14px;
+      }
+      .top-links a {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 44px;
+        height: 44px;
+        color: #fff;
+        text-decoration: none;
+        opacity: 0.85;
+        transition: opacity 0.15s ease;
+      }
+      .top-links a:hover { opacity: 1; }
+      .top-links svg {
+        width: 30px;
+        height: 30px;
+        display: block;
       }
       body {
         display: flex;
@@ -175,6 +204,10 @@
         opacity: 1;
         transition: opacity 0.4s ease;
       }
+      /* ----- Welcome overlay (v7.1) — monochrome aesthetic mirrored
+         from galinilin/artificialneural.network: #010002 background,
+         pure white text, white-bordered buttons that hard-invert and
+         scale up font-size 100→110 % on hover. ----- */
       .welcome-overlay {
         position: fixed;
         inset: 0;
@@ -182,151 +215,141 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        background: #000;
-        padding: 32px 24px;
+        background: #010002;
+        padding: 40px 24px;
         opacity: 1;
         transition: opacity 0.3s ease;
+        overflow-y: auto;
       }
       .welcome-overlay.fade-out {
         opacity: 0;
         pointer-events: none;
       }
       .welcome-card {
-        max-width: 640px;
+        max-width: 720px;
         width: 100%;
-        color: #ededed;
+        color: #fff;
         font-family: 'Inconsolata', ui-monospace, Menlo, monospace;
         text-align: center;
       }
-      .welcome-eyebrow {
-        color: #888;
-        font-size: 11px;
-        letter-spacing: 0.28em;
-        text-transform: uppercase;
-        margin-bottom: 18px;
-      }
       .welcome-title {
-        margin: 0 0 12px 0;
-        font-family: 'Inconsolata', ui-monospace, Menlo, monospace;
-        font-weight: 600;
-        font-size: 32px;
+        margin: 0 0 8px 0;
+        font-weight: 400;
+        font-size: 28px;
+        line-height: 1.35;
         letter-spacing: 0.01em;
         color: #fff;
-      }
-      .welcome-sub {
-        color: #aaa;
-        font-size: 14px;
-        line-height: 1.6;
-        margin: 0 auto 36px;
-        max-width: 520px;
       }
       .welcome-options {
         display: flex;
-        justify-content: center;
-        margin-bottom: 18px;
-      }
-      .welcome-options .welcome-btn {
-        max-width: 320px;
-        width: 100%;
-      }
-      .welcome-btn {
-        background: #0a0a0a;
-        border: 1px solid #2a2a2a;
-        color: #d8d8d8;
-        font-family: 'Inconsolata', ui-monospace, Menlo, monospace;
-        font-size: 13px;
-        cursor: pointer;
-        padding: 18px 16px;
-        text-align: left;
-        display: flex;
         flex-direction: column;
-        gap: 4px;
-        transition: border-color 0.15s, color 0.15s, background 0.15s;
+        align-items: center;
+        gap: 16px;
+        margin: 32px 0 28px;
+      }
+      /* artificialneural.network button rules — verbatim feel:
+         transparent bg, 1 px white border, instant invert + 110 %
+         font-size on hover (the size jiggle is intentional). */
+      .welcome-btn {
+        background: transparent;
+        color: #fff;
+        border: 1px solid #fff;
+        font-family: 'Inconsolata', ui-monospace, Menlo, monospace;
+        font-size: 18px;
+        font-weight: 400;
+        letter-spacing: 0.04em;
+        cursor: pointer;
+        padding: 14px 28px;
+        min-width: 260px;
       }
       .welcome-btn:hover:not(:disabled) {
-        color: #fff;
-        border-color: #ffdc6e;
+        background: #fff;
+        color: #010002;
+        font-size: 19.8px; /* 110 % of 18 px */
       }
       .welcome-btn:disabled {
-        opacity: 0.45;
-        cursor: not-allowed;
+        color: grey;
+        border-color: grey;
+        pointer-events: none;
       }
-      .welcome-btn-title {
-        font-size: 16px;
-        font-weight: 600;
-        letter-spacing: 0.04em;
+      .welcome-btn.secondary {
+        font-size: 14px;
+        padding: 8px 18px;
+        min-width: 0;
+      }
+      .welcome-btn.secondary:hover:not(:disabled) {
+        font-size: 15.4px; /* 110 % of 14 px */
+      }
+      .welcome-asterisk {
         color: #fff;
-      }
-      .welcome-btn-sub {
-        color: #999;
+        opacity: 0.45;
         font-size: 12px;
+        margin: 0;
+        max-width: 420px;
         line-height: 1.5;
       }
-      .welcome-btn-warn {
-        color: #d4a366;
-        font-size: 11px;
-        line-height: 1.45;
-        margin-top: 2px;
-        letter-spacing: 0.01em;
-      }
-      .welcome-btn-meta {
-        color: #6c6c6c;
-        font-size: 11px;
-        line-height: 1.45;
-        margin-top: 2px;
-        letter-spacing: 0.01em;
-      }
       .welcome-status {
-        color: #888;
-        font-size: 12px;
+        color: #fff;
+        opacity: 0.55;
+        font-size: 13px;
         letter-spacing: 0.06em;
         min-height: 18px;
-        margin-bottom: 32px;
+        margin: 4px 0 0;
       }
       .welcome-status.error {
-        color: #e07060;
-      }
-      .welcome-link {
-        background: none;
-        border: none;
-        color: #888;
-        font-family: 'Inconsolata', ui-monospace, Menlo, monospace;
-        font-size: 12px;
-        letter-spacing: 0.08em;
-        cursor: pointer;
-        padding: 6px 12px;
+        opacity: 0.9;
         text-decoration: underline;
-        text-decoration-color: #444;
-        text-underline-offset: 4px;
-      }
-      .welcome-link:hover {
-        color: #ededed;
-        text-decoration-color: #888;
       }
       .welcome-explain {
-        margin-top: 22px;
-        padding-top: 18px;
-        border-top: 1px solid #1f1f1f;
+        margin-top: 32px;
+        padding-top: 22px;
+        border-top: 1px solid #2a2a2a;
         text-align: left;
-        color: #b6b6b6;
-        font-size: 12.5px;
-        line-height: 1.7;
+        color: #fff;
+        font-size: 13.5px;
+        line-height: 1.75;
       }
       .welcome-explain p {
-        margin: 0 0 12px 0;
+        margin: 0 0 14px 0;
+        opacity: 0.85;
       }
       .welcome-explain p:last-child { margin-bottom: 0; }
-      .welcome-explain b { color: #ededed; }
-      .welcome-explain a { color: #ffdc6e; text-decoration: none; }
-      .welcome-explain a:hover { text-decoration: underline; }
-      .welcome-explain-meta {
-        color: #888;
-        font-size: 11.5px;
-        margin-top: 14px;
+      .welcome-explain h2 {
+        margin: 22px 0 10px 0;
+        font-weight: 400;
+        font-size: 18px;
+        letter-spacing: 0.02em;
+        color: #fff;
       }
+      .welcome-explain b {
+        font-weight: 400;
+        text-decoration: underline;
+        text-decoration-color: rgba(255, 255, 255, 0.4);
+        text-underline-offset: 3px;
+      }
+      .welcome-explain a {
+        color: #fff;
+        text-decoration: underline;
+        text-decoration-color: rgba(255, 255, 255, 0.4);
+        text-underline-offset: 3px;
+      }
+      .welcome-explain a:hover { text-decoration-color: #fff; }
     </style>
   </head>
   <body>
+    <!-- v7.1 — persistent source link, mirrored from
+         galinilin/artificialneural.network's top-links pattern. -->
+    <div class="top-links">
+      <a
+        href="https://github.com/galinilin/deepvariant-tfjs"
+        target="_blank"
+        rel="noopener"
+        title="Source on GitHub"
+        aria-label="Source on GitHub"
+      >
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56v-2c-3.2.7-3.87-1.36-3.87-1.36-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.75 2.68 1.24 3.34.95.1-.74.4-1.24.73-1.53-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.18-3.1-.12-.29-.51-1.46.11-3.05 0 0 .96-.31 3.15 1.18.92-.26 1.9-.39 2.88-.4.98.01 1.96.14 2.88.4 2.19-1.49 3.15-1.18 3.15-1.18.62 1.59.23 2.76.11 3.05.74.81 1.18 1.84 1.18 3.1 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.06.78 2.13v3.16c0 .31.21.67.8.56 4.57-1.52 7.86-5.83 7.86-10.91C23.5 5.65 18.35.5 12 .5z"/></svg>
+      </a>
+    </div>
     <div id="sketch-top" class="hidden-until-ready"></div>
     <div id="splitter" class="hidden-until-ready" title="Drag to resize"></div>
     <div id="sketch-bottom" class="hidden-until-ready"></div>
@@ -340,53 +363,67 @@
     <div id="read-tooltip" class="tooltip"></div>
     <div id="debug-modal" class="debug-modal" style="display:none"></div>
 
-    <!-- Welcome / loading overlay. Shown on first paint; main.ts hides it
-         once the user picks a world and the sketches are mounted. -->
+    <!-- v7.1 — welcome / loading overlay in the artificialneural.network
+         monochrome aesthetic. Shown on first paint; main.ts hides it
+         once the user clicks Launch Sandbox and the sketches mount. -->
     <div id="welcome-overlay" class="welcome-overlay">
       <div class="welcome-card">
-        <div class="welcome-eyebrow">deepvariant · in-browser</div>
-        <h1 class="welcome-title">Variant calling, locally.</h1>
-        <p class="welcome-sub">
-          Google's DeepVariant 1.8 InceptionV3 model running on your GPU
-          via TensorFlow.js. Encoded pileup → softmax over hom_ref · het · hom_alt.
-        </p>
+        <h1 class="welcome-title">
+          DeepVariant v1.8, running in your browser via tensorflow.js.
+        </h1>
 
         <div class="welcome-options">
           <button id="start-synthetic" class="welcome-btn" type="button">
-            <span class="welcome-btn-title">Launch sandbox</span>
-            <span class="welcome-btn-sub">generated reads, scenarios, full pileup UX</span>
-            <span class="welcome-btn-meta">~22 MB model on click</span>
+            Launch Sandbox
+          </button>
+          <p class="welcome-asterisk">
+            * clicking this pulls a ~22 MB quantized checkpoint and
+            warms up the WebGL backend on your GPU.
+          </p>
+          <div class="welcome-status" id="welcome-status"></div>
+
+          <button id="show-explain" class="welcome-btn secondary" type="button">
+            What even is this?
           </button>
         </div>
 
-        <div class="welcome-status" id="welcome-status"></div>
-
-        <button id="show-explain" class="welcome-link" type="button">
-          What even is this?
-        </button>
         <div class="welcome-explain" id="welcome-explain" style="display:none">
           <p>
-            DeepVariant is a deep-learning variant caller. Given a candidate
-            position in a genome, it builds a 100×221×7 "pileup image" of
-            the reads spanning that position and feeds it through an
-            InceptionV3 CNN that outputs P(hom_ref · het · hom_alt).
+            Yep — this really runs Google's <b>DeepVariant 1.8 WGS</b>
+            model end-to-end in your browser. The candidate engine, the
+            seven-channel pileup encoder, and the InceptionV3 network
+            itself are all here, in TypeScript + tfjs. No server.
+            Nothing leaves your machine.
           </p>
           <p>
-            This site runs the released DV 1.8 WGS model end-to-end in
-            your browser: the encoder, the candidate engine, and the model.
-            No server. No data leaves your machine.
+            I quantized the released checkpoint from float32 down to
+            uint8 to shrink it from ~85&nbsp;MB to ~22&nbsp;MB. The
+            conversion lives in
+            <a href="https://github.com/galinilin/dv-tfjs" target="_blank" rel="noopener">galinilin/dv-tfjs</a>
+            and the parity tests confirm the predictions match upstream
+            within rounding noise. Inference runs on your GPU through
+            tfjs's WebGL backend.
+          </p>
+
+          <h2>Why does this exist?</h2>
+          <p>
+            I have been doing deep learning since 2017, and over the
+            last year or so I have been gravitating toward the place
+            where ML meets biology. DeepVariant felt like the cleanest
+            thing to start from: a CNN doing real, useful work, used in
+            real clinical pipelines, with a paper trail you can sit
+            down and read. I wanted to take it apart instead of just
+            calling <code>.predict()</code> on a black box, so I rebuilt
+            the encoder and a tiny visualization layer around it. That
+            turned into this sandbox.
           </p>
           <p>
-            The sandbox generates a 1500&nbsp;bp reference + scenarios
-            (het, hom_alt, deletion, insertion, low-quality variants…) so
-            you can see how the seven channels encode and how the model
-            reacts. Use Prev / Next to step through candidates,
-            R&nbsp;to reroll the world.
-          </p>
-          <p class="welcome-explain-meta">
-            Source: <a href="https://github.com/galinilin/deepvariant-tfjs" target="_blank" rel="noopener">deepvariant-tfjs</a>
-            · model conversion: <a href="https://github.com/galinilin/dv-tfjs" target="_blank" rel="noopener">dv-tfjs</a>
-            · upstream: <a href="https://github.com/google/deepvariant" target="_blank" rel="noopener">google/deepvariant</a>
+            If you want the canonical "how does DeepVariant <i>see</i>?"
+            introduction, the Google AI blog post is the right starting
+            point:
+            <a href="https://google.github.io/deepvariant/posts/2020-02-20-looking-through-deepvariants-eyes/" target="_blank" rel="noopener">Looking Through DeepVariant's Eyes</a>.
+            Upstream project:
+            <a href="https://github.com/google/deepvariant" target="_blank" rel="noopener">google/deepvariant</a>.
           </p>
         </div>
       </div>
