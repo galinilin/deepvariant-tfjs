@@ -19,6 +19,12 @@
         color: #fff;
         font-family: 'Inconsolata', ui-monospace, Menlo, monospace;
         overflow: hidden;
+        /* Mirrors ANN's universal `user-select: none` rule. The
+           explainer block opts back into selectable text below. */
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
       }
       /* v7.1 — fixed top-right link, mirrored from
          galinilin/artificialneural.network. Sits above everything,
@@ -240,6 +246,14 @@
         letter-spacing: 0.01em;
         color: #fff;
       }
+      .welcome-title a {
+        color: inherit;
+        text-decoration: underline;
+        text-decoration-color: rgba(255, 255, 255, 0.4);
+        text-decoration-thickness: 1px;
+        text-underline-offset: 5px;
+      }
+      .welcome-title a:hover { text-decoration-color: #fff; }
       .welcome-options {
         display: flex;
         flex-direction: column;
@@ -315,7 +329,15 @@
         color: #fff;
         font-size: 13.5px;
         line-height: 1.75;
+        /* The only block that opts back into selectable text — the
+           explainer prose is meant to be quotable / copyable. */
+        -webkit-user-select: text;
+        -moz-user-select: text;
+        -ms-user-select: text;
+        user-select: text;
+        cursor: text;
       }
+      .welcome-explain a { cursor: pointer; }
       .welcome-explain p {
         margin: 0 0 14px 0;
         opacity: 0.85;
@@ -376,7 +398,8 @@
     <div id="welcome-overlay" class="welcome-overlay">
       <div class="welcome-card">
         <h1 class="welcome-title">
-          DeepVariant v1.8, running in your browser via tensorflow.js.
+          <a href="https://github.com/google/deepvariant" target="_blank" rel="noopener">DeepVariant</a>, running in your browser<br>
+          via <a href="https://github.com/tensorflow/tfjs" target="_blank" rel="noopener">tensorflow.js</a>
         </h1>
 
         <div class="welcome-options">
