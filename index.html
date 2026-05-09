@@ -432,41 +432,51 @@
 
         <div class="welcome-explain" id="welcome-explain" style="display:none">
           <p>
-            Yep — this really runs Google's <b>DeepVariant 1.8 WGS</b>
-            model end-to-end in your browser. The candidate engine, the
-            seven-channel pileup encoder, and the InceptionV3 network
-            itself are all here, in TypeScript + tfjs. No server.
-            Nothing leaves your machine.
+            This project runs Google's DeepVariant v1.8 WGS model
+            end-to-end in your browser. The candidate engine, the
+            seven-channel pileup encoder, and the backbone
+            InceptionV3 network itself are all here, in TypeScript
+            + tfjs. No server.
           </p>
           <p>
-            I quantized the released checkpoint from float32 down to
-            uint8 to shrink it from ~85&nbsp;MB to ~22&nbsp;MB. The
-            conversion lives in
-            <a href="https://github.com/galinilin/dv-tfjs" target="_blank" rel="noopener">galinilin/dv-tfjs</a>
-            and the parity tests confirm the predictions match upstream
-            within rounding noise. Inference runs on your device through
-            tfjs's WebGL backend.
+            I quantized the released checkpoint down to uint8 to
+            shrink it to ~22&nbsp;MB, ran parity tests against
+            upstream, and the predictions match within rounding
+            noise. Inference runs on your device through tfjs's
+            WebGL backend.
           </p>
 
           <h2>Why does this exist?</h2>
           <p>
-            I have been doing deep learning since 2017, and over the
-            last year or so I have been gravitating toward the place
-            where ML meets biology. DeepVariant felt like the cleanest
-            thing to start from: a CNN doing real, useful work, used in
-            real clinical pipelines, with a paper trail you can sit
-            down and read. I wanted to take it apart instead of just
-            calling <code>.predict()</code> on a black box, so I rebuilt
-            the encoder and a tiny visualization layer around it. That
-            turned into this sandbox.
+            Over the last year or so I have been exploring where
+            deep learning meets biology, and DeepVariant felt like
+            the cleanest thing to start from: a CNN doing real,
+            useful work, used in real clinical pipelines, with a
+            paper trail you can sit down and read. While digging
+            into how variant-calling gets reframed as image
+            classification, I stumbled into the official blog post
+            <a href="https://google.github.io/deepvariant/posts/2020-02-20-looking-through-deepvariants-eyes/" target="_blank" rel="noopener">Looking Through DeepVariant's Eyes</a>
+            and got the urge to build a live version of it.
           </p>
           <p>
-            If you want the canonical "how does DeepVariant <i>see</i>?"
-            introduction, the Google AI blog post is the right starting
-            point:
-            <a href="https://google.github.io/deepvariant/posts/2020-02-20-looking-through-deepvariants-eyes/" target="_blank" rel="noopener">Looking Through DeepVariant's Eyes</a>.
-            Upstream project:
-            <a href="https://github.com/google/deepvariant" target="_blank" rel="noopener">google/deepvariant</a>.
+            I wanted to take it apart and make it easily traceable,
+            instead of just calling <code>.predict()</code> on a
+            black box. So I rebuilt the encoder and wrapped a
+            visualization layer around it. That turned into this
+            sandbox.
+          </p>
+          <p>
+            Some years ago I built a similar in-browser sandbox
+            called
+            <a href="https://artificialneural.network" target="_blank" rel="noopener">artificialneural.network</a>
+            — a toy neural net you can configure layer by layer,
+            compile against a sample dataset, train step by step,
+            and click any neuron to inspect its weights. That one
+            was a way to teach myself (and anyone curious) how an
+            MLP actually moves while it learns. This is what
+            happens when you point the same instinct — interactive,
+            in-browser, p5 + tfjs, every step legible — at a real
+            production model.
           </p>
         </div>
       </div>
