@@ -245,14 +245,16 @@
         line-height: 1.3;
         letter-spacing: 0.01em;
         color: #fff;
+        white-space: nowrap;
       }
       .welcome-title a {
         color: inherit;
         text-decoration-line: underline;
         text-decoration-style: dotted;
-        text-decoration-color: rgba(255, 255, 255, 0.65);
+        text-decoration-color: transparent;
         text-decoration-thickness: 1.5px;
         text-underline-offset: 6px;
+        transition: text-decoration-color 0.15s ease;
       }
       .welcome-title a:hover { text-decoration-color: #fff; }
       .welcome-options {
@@ -363,9 +365,10 @@
         color: #fff;
         text-decoration-line: underline;
         text-decoration-style: dotted;
-        text-decoration-color: rgba(255, 255, 255, 0.6);
+        text-decoration-color: transparent;
         text-decoration-thickness: 1px;
         text-underline-offset: 4px;
+        transition: text-decoration-color 0.15s ease;
       }
       .welcome-explain a:hover { text-decoration-color: #fff; }
     </style>
