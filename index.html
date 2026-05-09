@@ -221,10 +221,13 @@
         max-width: 520px;
       }
       .welcome-options {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 14px;
+        display: flex;
+        justify-content: center;
         margin-bottom: 18px;
+      }
+      .welcome-options .welcome-btn {
+        max-width: 320px;
+        width: 100%;
       }
       .welcome-btn {
         background: #0a0a0a;
@@ -350,14 +353,9 @@
 
         <div class="welcome-options">
           <button id="start-synthetic" class="welcome-btn" type="button">
-            <span class="welcome-btn-title">Synthetic</span>
-            <span class="welcome-btn-sub">generated reads, scenarios, sandbox UX</span>
+            <span class="welcome-btn-title">Launch sandbox</span>
+            <span class="welcome-btn-sub">generated reads, scenarios, full pileup UX</span>
             <span class="welcome-btn-meta">~22 MB model on click</span>
-          </button>
-          <button id="start-real" class="welcome-btn" type="button">
-            <span class="welcome-btn-title">Real BAM</span>
-            <span class="welcome-btn-sub">chr20 NA12878 from DV testdata</span>
-            <span class="welcome-btn-warn">~22 MB model + ~2.5 MB reads on click</span>
           </button>
         </div>
 
@@ -379,12 +377,11 @@
             No server. No data leaves your machine.
           </p>
           <p>
-            <b>Synthetic</b> generates a 1500&nbsp;bp reference + scenarios
+            The sandbox generates a 1500&nbsp;bp reference + scenarios
             (het, hom_alt, deletion, insertion, low-quality variants…) so
-            you can see the encoding shapes directly.
-            <b>Real BAM</b> loads ~2,500 actual NA12878 reads + 43
-            DV-emitted candidates from a 5&nbsp;kb slice of chr20 in DV's
-            own testdata — Prev/Next steps through real variants.
+            you can see how the seven channels encode and how the model
+            reacts. Use Prev / Next to step through candidates,
+            R&nbsp;to reroll the world.
           </p>
           <p class="welcome-explain-meta">
             Source: <a href="https://github.com/galinilin/deepvariant-tfjs" target="_blank" rel="noopener">deepvariant-tfjs</a>

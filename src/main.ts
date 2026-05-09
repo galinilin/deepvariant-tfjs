@@ -77,26 +77,18 @@ if (!topElMaybe || !bottomElMaybe) throw new Error('missing sketch containers');
 const topEl: HTMLElement = topElMaybe;
 const bottomEl: HTMLElement = bottomElMaybe;
 
-// v5.3: welcome screen + explicit Synthetic / Real picker. Model loads
-// in parallel with the user reading the welcome text. Query-param
-// shortcuts (?world=synthetic|real-bam) skip the picker for direct
-// deep-linking.
+// v7.0: welcome screen → single Synthetic launch tile. Model + world
+// build kick off when the user clicks; nothing downloads on page open.
+// `?autostart=1` skips the picker for deep-linking.
 const params = new URLSearchParams(window.location.search);
-const queryWorld =
-  params.get('world') === 'real-bam' || params.get('world') === 'real'
-    ? 'real-bam'
-    : params.get('world') === 'synthetic'
-      ? 'synthetic'
-      : null;
+const autostart = params.get('autostart') === '1' || params.get('world') === 'synthetic';
 
 let top: SketchHandle | null = null;
 let bottom: BottomHandle | null = null;
-let chosenWorldKind: 'synthetic' | 'real-bam' = 'synthetic';
 
 const welcomeEl = document.getElementById('welcome-overlay');
 const welcomeStatus = document.getElementById('welcome-status');
 const synthBtn = document.getElementById('start-synthetic') as HTMLButtonElement | null;
-const realBtn = document.getElementById('start-real') as HTMLButtonElement | null;
 const explainBtn = document.getElementById('show-explain');
 const explainEl = document.getElementById('welcome-explain');
 
@@ -141,37 +133,17 @@ explainBtn?.addEventListener('click', () => {
   explainEl.style.display = showing ? 'none' : 'block';
 });
 
-// Buttons enabled immediately — the load happens on click, not on open.
-synthBtn?.addEventListener('click', () => void startWorld('synthetic'));
-realBtn?.addEventListener('click', () => void startWorld('real-bam'));
+synthBtn?.addEventListener('click', () => void startWorld());
+if (autostart) void startWorld();
 
-// Query-param shortcut still works: triggers the same startWorld path,
-// which loads the model on demand.
-if (queryWorld) {
-  void startWorld(queryWorld);
-}
-
-async function startWorld(kind: 'synthetic' | 'real-bam'): Promise<void> {
-  chosenWorldKind = kind;
+async function startWorld(): Promise<void> {
   if (synthBtn) synthBtn.disabled = true;
-  if (realBtn) realBtn.disabled = true;
   if (welcomeStatus) welcomeStatus.classList.remove('error');
 
   try {
-    // Load model + build world in parallel — both are async, both
-    // depend on the click but not on each other. Model load callbacks
-    // own the welcome status text during the longer (~22 MB) download.
-    const buildingWorld = buildWorld(
-      kind === 'synthetic'
-        ? { kind: 'synthetic', seed: 42 }
-        : { kind: 'real-bam' },
-    );
-    const [model, world] = await Promise.all([loadModel(), buildingWorld]);
+    const world = buildWorld({ seed: 42 });
+    const model = await loadModel();
 
-    // Reveal sandbox containers before mounting so canvas size measurement
-    // sees the right viewport dimensions. Use .sandbox-revealed (instead
-    // of just removing .hidden-until-ready) so the containers fade in
-    // over 0.4s instead of hard-cutting in.
     document.querySelectorAll('.hidden-until-ready').forEach((el) => {
       (el as HTMLElement).classList.add('sandbox-revealed');
     });
@@ -180,7 +152,6 @@ async function startWorld(kind: 'synthetic' | 'real-bam'): Promise<void> {
     bottom = mountBottomSketch(bottomEl, model);
     attachUiHandlers(top);
 
-    // Fade out the welcome overlay then remove it.
     if (welcomeEl) {
       welcomeEl.classList.add('fade-out');
       setTimeout(() => welcomeEl.remove(), 320);
@@ -191,7 +162,6 @@ async function startWorld(kind: 'synthetic' | 'real-bam'): Promise<void> {
       welcomeStatus.classList.add('error');
     }
     if (synthBtn) synthBtn.disabled = false;
-    if (realBtn) realBtn.disabled = false;
   }
 }
 
@@ -237,22 +207,9 @@ mountDebugModal();
   }
 }
 
-/**
- * Randomize semantics:
- *   - synthetic: regenerate the whole world with a fresh seed (new ref,
- *     new scenarios, new reads). The reference length stays at the
- *     synthetic default so the p5 ref-cache size remains valid.
- *   - real-bam: pick a random already-loaded candidate to snap the
- *     window to (the underlying world is fixed for the session).
- */
-async function rerollWorld(handle: SketchHandle): Promise<void> {
-  if (chosenWorldKind === 'synthetic') {
-    const seed = Math.floor(Math.random() * 0x7fffffff) || 1;
-    const fresh = await buildWorld({ kind: 'synthetic', seed });
-    handle.setWorld(fresh);
-  } else {
-    handle.randomize();
-  }
+function rerollWorld(handle: SketchHandle): void {
+  const seed = Math.floor(Math.random() * 0x7fffffff) || 1;
+  handle.setWorld(buildWorld({ seed }));
 }
 
 function attachUiHandlers(handle: SketchHandle): void {
@@ -260,7 +217,7 @@ function attachUiHandlers(handle: SketchHandle): void {
   resetBtn?.addEventListener('click', () => handle.resetView());
 
   const randomizeBtn = document.getElementById('randomize');
-  randomizeBtn?.addEventListener('click', () => void rerollWorld(handle));
+  randomizeBtn?.addEventListener('click', () => rerollWorld(handle));
 
   const prevCandBtn = document.getElementById('prev-cand');
   prevCandBtn?.addEventListener('click', () => handle.prevCandidate());
@@ -280,7 +237,7 @@ function attachUiHandlers(handle: SketchHandle): void {
     }
     if (ev.key === 'ArrowLeft') handle.prevCandidate();
     else if (ev.key === 'ArrowRight') handle.nextCandidate();
-    else if (ev.key === 'r' || ev.key === 'R') void rerollWorld(handle);
+    else if (ev.key === 'r' || ev.key === 'R') rerollWorld(handle);
   });
 }
 

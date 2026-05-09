@@ -72,8 +72,7 @@ export interface SketchHandle {
   nextCandidate: () => number;
   prevCandidate: () => number;
   /** Replace the current world (reference + reads + scenarios). Used by
-   * the synthetic Randomize button to regenerate; real-bam mode keeps
-   * the loaded fixture for the session. */
+   * the Randomize button to regenerate the sandbox with a fresh seed. */
   setWorld: (world: World) => void;
   /** Manually trigger a canvas resize. Called from main.ts after the
    * vertical splitter is dragged so the canvas matches its container. */
@@ -309,10 +308,10 @@ export function mountTopSketch(container: HTMLElement, initialWorld: World): Ske
     };
 
     const randomize = () => {
-      // In real-bam mode the world is fixed for the session — the
-      // intuitive "Randomize" gesture becomes "jump to a random
-      // candidate in the loaded region." Synthetic-mode worlds get
-      // regenerated via setWorld() from main.ts when needed.
+      // Jump to a random candidate inside the current world. The
+      // top-level Randomize button in main.ts goes further and
+      // regenerates the world via setWorld(); this in-sketch version
+      // is kept as the cheaper "shuffle which variant is centered" op.
       if (scenarios.length === 0) return;
       const idx = Math.floor(Math.random() * scenarios.length);
       snapToCandidate(idx);
@@ -340,10 +339,9 @@ export function mountTopSketch(container: HTMLElement, initialWorld: World): Ske
       referenceRef = reference;
       readsRef = reads;
       activeCandidateIdx = 0;
-      // NOTE: ref-cache size is fixed at p5 setup based on reference.length,
-      // so cross-mode hot-swap (synthetic 1500 ↔ real-bam 5000) needs a
-      // page reload. Same-mode swaps (synthetic seed change) are safe
-      // because reference length is stable.
+      // NOTE: ref-cache size is fixed at p5 setup based on reference.length.
+      // Reroll keeps the same length (synthetic default), so the cache
+      // sizing stays valid across setWorld calls.
       if (scenarios.length > 0) {
         snapToCandidate(0);
       } else {
