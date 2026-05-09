@@ -257,6 +257,13 @@
         transition: text-decoration-color 0.15s ease;
       }
       .welcome-title a:hover { text-decoration-color: #fff; }
+      .welcome-title .link-logo {
+        display: inline-block;
+        height: 0.85em;
+        width: auto;
+        vertical-align: -0.12em;
+        margin-right: 0.32em;
+      }
       .welcome-options {
         display: flex;
         flex-direction: column;
@@ -406,7 +413,7 @@
     <div id="welcome-overlay" class="welcome-overlay">
       <div class="welcome-card">
         <h1 class="welcome-title">
-          <a href="https://github.com/google/deepvariant" target="_blank" rel="noopener">DeepVariant</a>, in your browser via <a href="https://github.com/tensorflow/tfjs" target="_blank" rel="noopener">tensorflow.js</a>
+          <a href="https://github.com/google/deepvariant" target="_blank" rel="noopener"><img class="link-logo" src="logos/dv_icon.png" alt="" aria-hidden="true">DeepVariant</a>, in your browser via <a href="https://github.com/tensorflow/tfjs" target="_blank" rel="noopener"><svg class="link-logo" viewBox="0 0 24 24" fill="#FF6F00" aria-hidden="true"><path d="M1.292 5.856L11.54 0v24l-4.095-2.378V7.603l-6.168 3.564.015-5.31zm21.43 5.311l-.014-5.31L12.46 0v24l4.095-2.378V14.87l3.092 1.788-.018-4.618-3.074-1.756V7.603l6.168 3.564z"/></svg>tensorflow.js</a>
         </h1>
 
         <div class="welcome-options">
