@@ -2,9 +2,3 @@ node_modules/
 dist/
 .vite/
 *.log
-
-# Model + fixture artifacts are large and reproducible from /root/dv-tfjs/out/.
-# Run `npm run sync-models` to populate. If you want to commit them, switch to
-# Git LFS using the template in .gitattributes.
-public/models/
-public/fixtures/
