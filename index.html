@@ -226,6 +226,11 @@
         opacity: 1;
         transition: opacity 0.3s ease;
         overflow-y: auto;
+        scrollbar-width: none; /* Firefox */
+        -ms-overflow-style: none; /* legacy Edge/IE */
+      }
+      .welcome-overlay::-webkit-scrollbar {
+        display: none; /* WebKit (Chrome / Safari) */
       }
       .welcome-overlay.fade-out {
         opacity: 0;
