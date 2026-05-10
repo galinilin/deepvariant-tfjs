@@ -43,7 +43,10 @@ export class DeepVariantModel {
 
   static async load(opts: LoadOptions = {}): Promise<DeepVariantModel> {
     const precision = opts.precision ?? 'uint8';
-    const base = (opts.modelBaseUrl ?? '/models/').replace(/\/?$/, '/');
+    // Default to Vite's BASE_URL prefix so the GitHub Pages deploy at
+    // /deepvariant-tfjs/ resolves model.json correctly. Dev: '/models/'.
+    const defaultBase = `${import.meta.env.BASE_URL}models/`;
+    const base = (opts.modelBaseUrl ?? defaultBase).replace(/\/?$/, '/');
     const dir = precision === 'uint8' ? 'tfjs_dv_wgs_uint8' : 'tfjs_dv_wgs';
     await tf.ready();
     opts.onStage?.('fetching');
