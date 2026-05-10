@@ -1,10 +1,4 @@
-# deepvariant-tfjs
-
-Vue 3 + Vite + TypeScript app shell around a single
-`DeepVariantModel` class that runs Google's DeepVariant 1.8 WGS
-InceptionV3 model client-side via TensorFlow.js.
-
-Live demo: <https://galinilin.github.io/deepvariant-tfjs/>
+Visit the tool: [galinilin.github.io/deepvariant-tfjs](https://galinilin.github.io/deepvariant-tfjs)
 
 ## What even is this?
 
@@ -20,6 +14,6 @@ I wanted to take it apart and make it easily traceable, instead of just calling 
 
 The data within the sandbox is generated synthetically. Each time you click Randomize I regenerate a ~1500 bp reference, drop in a handful of scenarios (het / hom_alt SNVs, small indels, low-quality cases), and simulate reads that cover them, so the model is real, the data feeding it is fabricated, and the placed scenarios act as ground truth.
 
-Some years ago I built a similar in-browser sandbox called [artificialneural.network](https://github.com/galinilin/artificialneural.network) — a toy neural net you can configure layer by layer, compile against a sample dataset, train step by step, and click any neuron to inspect its weights. That one was a way to visualize and teach how an MLP actually moves while it learns. This is what happens when you point the same instinct: interactive, in-browser, p5 + tfjs, every step legible, at a real production model.
+Some years ago I built a similar in-browser sandbox called [artificialneural.network](https://github.com/galinilin/artificialneural.network), a toy neural net you can configure layer by layer, compile against a sample dataset, train step by step, and click any neuron to inspect its weights. That one was a way to visualize and teach how an MLP actually moves while it learns. This is what happens when you point the same instinct: interactive, in-browser, p5 + tfjs, every step legible, at a real production model.
 
 [GitHub](https://github.com/galinilin) · [X](https://x.com/galinilin) · [LinkedIn](https://www.linkedin.com/in/galiun)
