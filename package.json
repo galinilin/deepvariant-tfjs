@@ -9,8 +9,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "sync-models": "bash scripts/sync-models.sh",
-    "predeploy": "bash scripts/sync-models.sh uint8-only && npm run build",
+    "predeploy": "npm run build",
     "deploy": "gh-pages -d dist --dotfiles --branch gh-pages --message 'deploy: deepvariant-tfjs site'"
   },
   "dependencies": {
