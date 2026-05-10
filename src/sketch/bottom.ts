@@ -3,16 +3,21 @@ import { sandboxState } from '../lib/sandbox-state';
 import { encodePileup } from '../lib/pileup-encoder';
 import { DeepVariantModel, type Genotype } from '../lib/DeepVariantModel';
 import { formatAlt } from '../lib/candidate';
+import { recordPrediction } from '../lib/debug-telemetry';
 
 export interface BottomHandle {
   destroy: () => void;
+  /** Manually trigger a canvas resize. Called by main.ts after the
+   * vertical splitter is dragged so the canvas matches its container. */
+  resize: () => void;
 }
 
 const LABEL_COLOR: [number, number, number] = [210, 210, 210];
 const MUTED_COLOR: [number, number, number] = [120, 120, 120];
 const BORDER_COLOR: [number, number, number] = [48, 48, 48];
 const PLACEHOLDER_COLOR: [number, number, number] = [90, 90, 90];
-const ACCEPT_COLOR: [number, number, number] = [255, 220, 110];
+// (ACCEPT_COLOR removed in v5.4 — superseded by AMBER readonly tuple
+// used for animated bar color targets.)
 
 const MARGIN = 40;
 const GAP = 40;
@@ -31,6 +36,7 @@ const CHANNEL_NAMES = [
 
 const TENSOR_W = 221;
 const TENSOR_H = 100;
+const REF_ROWS = 5;
 const N_CHANNELS = 7;
 
 const PREDICT_DEBOUNCE_MS = 220;
@@ -42,16 +48,114 @@ interface CachedPrediction {
   probs: [number, number, number];
   argmax: Genotype;
   channelImages: p5.Image[]; // 7 grayscale strips
+  /** Image-row → read.id, for hover-pixel → read translation. */
+  rowToReadId: (string | null)[];
 }
 
-export function mountBottomSketch(container: HTMLElement): BottomHandle {
-  let model: DeepVariantModel | null = null;
-  let modelPromise: Promise<DeepVariantModel> | null = null;
+// v5.4 — per-frame tween of probability bars + argmax color. Uses
+// exponential decay so the lerp is time-step independent and frame-rate
+// changes (background tab → foreground) don't snap or speed up.
+const ANIM_TC_MS = 80; // ~63% in 80ms, ~95% in 240ms
+const ANIM_DT_CLAMP_MS = 100;
+const AMBER: readonly [number, number, number] = [255, 220, 110];
+const BAR_GRAY: readonly [number, number, number] = [80, 80, 80];
+
+const CLASS_INDEX: Record<Genotype, 0 | 1 | 2> = {
+  hom_ref: 0,
+  het: 1,
+  hom_alt: 2,
+};
+
+export function mountBottomSketch(
+  container: HTMLElement,
+  model: DeepVariantModel,
+): BottomHandle {
   let modelError: string | null = null;
+  let resizeFn: () => void = () => {};
   let predicting = false;
   let cached: CachedPrediction | null = null;
   let pendingTimer: number | null = null;
   let pendingTarget: { pos: number; generation: number; candidateKey: string } | null = null;
+
+  // v6.0: which channel is rendered large in the right pane. Click any
+  // name in the left list to lock a different one. Default = read_base.
+  let activeChannel = 0;
+  // Layout of the active-channel image (in canvas coords) — used by
+  // mouse hover to translate (mx, my) → (col, row) in the 100×221 tensor.
+  // visibleRowCount + firstEncoderRow describe the cropped slice
+  // currently rendered (we skip ref rows and trailing empty rows).
+  const activeChannelBox = {
+    x: 0,
+    y: 0,
+    w: 0,
+    h: 0,
+    firstEncoderRow: REF_ROWS,
+    visibleRowCount: TENSOR_H - REF_ROWS,
+  };
+  // v6.1: clickable toggle rects below the active channel image. Updated
+  // each frame by drawPileupPanel; hit-tested by p.mousePressed.
+  const toggleRects: Array<{
+    kind: 'autofocus' | 'rowsort';
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  }> = [];
+  // Hit-test rects for each channel name in the left list. Updated each
+  // draw frame; consumed by p.mousePressed.
+  const channelNameRects: Array<{ x: number; y: number; w: number; h: number }> = [];
+
+  // Animated display state — tweens toward `cached` each frame so bars
+  // grow/shrink + amber crossfades smoothly between predictions.
+  const animState = {
+    probs: [0, 0, 0] as [number, number, number],
+    barColors: [
+      [BAR_GRAY[0], BAR_GRAY[1], BAR_GRAY[2]],
+      [BAR_GRAY[0], BAR_GRAY[1], BAR_GRAY[2]],
+      [BAR_GRAY[0], BAR_GRAY[1], BAR_GRAY[2]],
+    ] as [
+      [number, number, number],
+      [number, number, number],
+      [number, number, number],
+    ],
+    lastFrameMs: 0,
+  };
+
+  function tickPredictionAnimation(): void {
+    if (!cached) return;
+    const now = performance.now();
+    const dt =
+      animState.lastFrameMs === 0
+        ? 16
+        : Math.min(ANIM_DT_CLAMP_MS, now - animState.lastFrameMs);
+    animState.lastFrameMs = now;
+    const alpha = 1 - Math.exp(-dt / ANIM_TC_MS);
+
+    const argmaxIdx = CLASS_INDEX[cached.argmax];
+    for (let i = 0; i < 3; i++) {
+      animState.probs[i] += (cached.probs[i] - animState.probs[i]) * alpha;
+      const target = i === argmaxIdx ? AMBER : BAR_GRAY;
+      for (let c = 0; c < 3; c++) {
+        animState.barColors[i][c] +=
+          (target[c] - animState.barColors[i][c]) * alpha;
+      }
+    }
+  }
+
+  // How "amber-like" is a bar's current color, 0..1? Threshold this for
+  // styling decisions (label color, prob font size) so styles don't
+  // flicker mid-tween.
+  function amberProgress(rgb: [number, number, number]): number {
+    const dr = rgb[0] - BAR_GRAY[0];
+    const dg = rgb[1] - BAR_GRAY[1];
+    const db = rgb[2] - BAR_GRAY[2];
+    const tr = AMBER[0] - BAR_GRAY[0];
+    const tg = AMBER[1] - BAR_GRAY[1];
+    const tb = AMBER[2] - BAR_GRAY[2];
+    const num = dr * tr + dg * tg + db * tb;
+    const den = tr * tr + tg * tg + tb * tb;
+    return Math.max(0, Math.min(1, num / den));
+  }
 
   const candidateKey = (): string => {
     const c = sandboxState.candidate;
@@ -77,24 +181,63 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
       p.createCanvas(w, h);
       p.pixelDensity(p.displayDensity());
       p.textFont('Inconsolata');
-
-      // Lazy-start model load; first draw frame after this resolves
-      // unblocks the predict pipeline.
-      modelPromise = DeepVariantModel.load({});
-      modelPromise
-        .then((m) => {
-          model = m;
-        })
-        .catch((err) => {
-          modelError =
-            err instanceof Error ? err.message : 'unknown model load error';
-        });
+      // Model is pre-loaded by the welcome flow and passed in. No lazy
+      // load here — by the time bottom is mounted, model is ready.
     };
 
-    p.windowResized = () => {
+    const doResize = () => {
       const { w, h } = size();
       p.resizeCanvas(w, h);
     };
+    p.windowResized = doResize;
+    resizeFn = doResize;
+
+    // v6.0: click anywhere on the channel-name list to lock that
+    // channel as the active rendering. Hit-test against rects laid
+    // out in drawPileupPanel each frame.
+    p.mousePressed = () => {
+      const mx = p.mouseX;
+      const my = p.mouseY;
+      // Toggle bar (Auto-focus / Row sort) — checked first so the
+      // toggles take priority over channel-name clicks if their rects
+      // ever overlap (they don't currently).
+      for (const t of toggleRects) {
+        if (mx >= t.x && mx < t.x + t.w && my >= t.y && my < t.y + t.h) {
+          if (t.kind === 'autofocus') {
+            sandboxState.autoFocus = !sandboxState.autoFocus;
+          } else if (t.kind === 'rowsort') {
+            sandboxState.rowSort =
+              sandboxState.rowSort === 'igv-aligned' ? 'dv-style' : 'igv-aligned';
+            // Force a re-encode + re-predict on the new sort.
+            sandboxState.readsGeneration += 1;
+            sandboxState.hover = null;
+          }
+          return;
+        }
+      }
+      for (let i = 0; i < channelNameRects.length; i++) {
+        const r = channelNameRects[i];
+        if (mx >= r.x && mx < r.x + r.w && my >= r.y && my < r.y + r.h) {
+          if (activeChannel !== i) {
+            activeChannel = i;
+            sandboxState.hover = null; // reset hover when switching channel
+          }
+          return;
+        }
+      }
+    };
+
+    // v6.0: hovering a pixel inside the active channel image writes a
+    // hover record to sandboxState. The top canvas reads it and renders
+    // a column highlight + read outline.
+    p.mouseMoved = () => updateHoverFromMouse(p.mouseX, p.mouseY);
+    p.mouseDragged = () => updateHoverFromMouse(p.mouseX, p.mouseY);
+
+    // Clearing on mouse-out can't happen via the p5 hook (no leave event
+    // — the canvas only fires when the mouse is INSIDE). Wire it via DOM.
+    container.addEventListener('mouseleave', () => {
+      sandboxState.hover = null;
+    });
 
     p.draw = () => {
       p.background(0);
@@ -106,7 +249,7 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
       const gen = sandboxState.readsGeneration;
 
       // Schedule a predict if state changed and we have everything we need.
-      if (model && c && reads && reference && pos !== null) {
+      if (c && reads && reference && pos !== null) {
         const key = candidateKey();
         const stale =
           !cached ||
@@ -118,9 +261,11 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
         }
       }
 
+      tickPredictionAnimation();
+
       const innerW = p.width - MARGIN * 2 - GAP;
       const innerH = p.height - MARGIN * 2;
-      const leftW = Math.round(innerW * 0.72);
+      const leftW = Math.round(innerW * 0.68);
       const rightW = innerW - leftW;
 
       drawPileupPanel(p, MARGIN, MARGIN, leftW, innerH);
@@ -129,6 +274,19 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
   }, container);
 
   function schedulePredict(pos: number, generation: number, key: string): void {
+    // CRITICAL: only reset the timer when the target actually changes.
+    // p.draw runs at 60 Hz; if we reset the 220 ms debounce on every frame,
+    // it never elapses while the tab is foregrounded — predicts only fire
+    // when rAF is throttled (e.g., tab switch). Symptom users hit: have to
+    // alt-tab away and back to see predictions update.
+    if (
+      pendingTarget &&
+      pendingTarget.pos === pos &&
+      pendingTarget.generation === generation &&
+      pendingTarget.candidateKey === key
+    ) {
+      return;
+    }
     pendingTarget = { pos, generation, candidateKey: key };
     if (pendingTimer !== null) window.clearTimeout(pendingTimer);
     pendingTimer = window.setTimeout(() => {
@@ -138,7 +296,7 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
   }
 
   async function runPredict(): Promise<void> {
-    if (!model || predicting || !pendingTarget) return;
+    if (predicting || !pendingTarget) return;
     const target = pendingTarget;
     pendingTarget = null;
 
@@ -160,8 +318,10 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
       return;
     }
 
-    const tensor = encodePileup(reads, reference, pos, c);
-    if (!tensor) return;
+    const encoded = encodePileup(reads, reference, pos, c, sandboxState.rowSort);
+    if (!encoded) return;
+    const tensor = encoded.tensor;
+    const rowToReadId = encoded.rowToReadId;
 
     // DV preprocessing: the network was trained on (uint8_pixel - 128) / 128
     // in [-1, 1]. Source: dv-tfjs/scripts/convert.py + deepvariant/dv_utils.py.
@@ -173,6 +333,7 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
     }
 
     predicting = true;
+    const t0 = performance.now();
     try {
       const result = await model.predict(modelInput);
       const probs: [number, number, number] = [
@@ -180,7 +341,8 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
         result.probs.het,
         result.probs.hom_alt,
       ];
-      const channelImages = buildChannelImages(instance, tensor);
+      recordPrediction(probs, result.argmax, performance.now() - t0);
+      const channelImages = await buildChannelImages(instance, tensor);
       cached = {
         pos: target.pos,
         generation: target.generation,
@@ -188,7 +350,14 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
         probs,
         argmax: result.argmax,
         channelImages,
+        rowToReadId,
       };
+      // Publish row mapping so the top canvas can resolve hover →
+      // encoder row for cross-canvas hover linking.
+      sandboxState.latestRowToReadId = rowToReadId;
+      // New prediction → old hover record points at a stale (col, row, read).
+      // Clear it; user's next mousemove will re-populate from the new tensor.
+      sandboxState.hover = null;
     } catch (err) {
       modelError = err instanceof Error ? err.message : 'predict failed';
     } finally {
@@ -205,66 +374,235 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
   ): void {
     drawPanelChrome(p, x, y, w, h, 'Pileup Image');
 
+    // v6.0 — 1:3 channel selector layout. Left ~25% column lists the 7
+    // channel names (clickable); right ~75% renders only the locked
+    // active channel large, so the user can actually study it.
+    const innerTop = y + HEADER_HEIGHT;
+    const innerBottom = y + h - 6;
+    const innerLeft = x + 12;
+    const innerRight = x + w - 12;
+    const innerWidth = innerRight - innerLeft;
+    const listW = Math.round(innerWidth * 0.20);
+    const gap = 12;
+    const activeX = innerLeft + listW + gap;
+    const activeW = innerRight - activeX;
+    // Reserve strips below the image: a footer text row + a clickable
+    // toggle row for Auto-focus and Row sort. Sized so the 13-px
+    // footer + 14-px toggles sit cleanly outside the image border.
+    const FOOTER_H = 22;
+    const TOGGLE_H = 26;
+    const activeH = innerBottom - innerTop - FOOTER_H - TOGGLE_H;
+    const footerY = innerTop + activeH + 4;
+    const toggleY = innerTop + activeH + FOOTER_H;
+    activeChannelBox.x = activeX;
+    activeChannelBox.y = innerTop;
+    activeChannelBox.w = activeW;
+    activeChannelBox.h = activeH;
+
+    // --- left: clickable channel-name list ---
+    channelNameRects.length = 0;
+    const rowH = Math.max(22, Math.floor(activeH / N_CHANNELS));
+    const listTop = innerTop + Math.max(0, (activeH - rowH * N_CHANNELS) / 2);
+    p.textAlign(p.LEFT, p.CENTER);
+    p.textSize(13);
+    for (let ch = 0; ch < N_CHANNELS; ch++) {
+      const rowY = listTop + ch * rowH;
+      const isActive = ch === activeChannel;
+      const rowRect = { x: innerLeft, y: rowY, w: listW, h: rowH };
+      channelNameRects.push(rowRect);
+
+      // Active-row marker (▶) + amber text; non-active rows in muted gray.
+      p.noStroke();
+      if (isActive) {
+        p.fill(AMBER[0], AMBER[1], AMBER[2]);
+        p.text('▶', innerLeft, rowY + rowH / 2);
+        p.fill(AMBER[0], AMBER[1], AMBER[2]);
+      } else {
+        p.fill(MUTED_COLOR[0], MUTED_COLOR[1], MUTED_COLOR[2]);
+      }
+      p.text(CHANNEL_NAMES[ch], innerLeft + 16, rowY + rowH / 2);
+    }
+
+    // --- right: active channel rendered big ---
     const c = sandboxState.candidate;
     if (!c) {
-      drawCenteredText(p, x, y, w, h, 'no candidate', PLACEHOLDER_COLOR, 13);
+      drawCenteredText(p, activeX, innerTop, activeW, activeH, 'no candidate', PLACEHOLDER_COLOR, 14);
       return;
     }
-
     if (modelError) {
-      drawCenteredText(
-        p,
-        x,
-        y,
-        w,
-        h,
-        `model error: ${modelError}`,
-        [200, 100, 100],
-        12,
-      );
+      drawCenteredText(p, activeX, innerTop, activeW, activeH,
+        `model error: ${modelError}`, [200, 100, 100], 13);
+      return;
+    }
+    if (!cached) {
+      drawCenteredText(p, activeX, innerTop, activeW, activeH, 'predicting…', [210, 185, 130], 16);
       return;
     }
 
-    if (!cached || cached.candidateKey !== candidateKey()) {
-      drawCenteredText(
-        p,
-        x,
-        y,
-        w,
-        h,
-        model ? 'predicting…' : 'loading model…',
-        PLACEHOLDER_COLOR,
-        12,
-      );
+    // Crop the rendered slice: skip the 5 ref rows (rows 0..4) and any
+    // empty padding rows beyond the last actually-used encoder row.
+    // The MODEL still ingests all 100 rows — this is a display-only crop.
+    // It just gives the user more pixel area for the rows that actually
+    // carry read information.
+    const lastUsedRow = (() => {
+      for (let i = TENSOR_H - 1; i >= REF_ROWS; i--) {
+        if (cached.rowToReadId[i] !== null) return i;
+      }
+      return REF_ROWS - 1;
+    })();
+    const visibleRowCount = lastUsedRow - REF_ROWS + 1;
+
+    if (visibleRowCount <= 0) {
+      drawCenteredText(p, activeX, innerTop, activeW, activeH,
+        'no qualifying reads at this position', PLACEHOLDER_COLOR, 13);
       return;
     }
 
-    // 7 channel strips stacked vertically
-    const stripsTop = y + HEADER_HEIGHT;
-    const stripsBottom = y + h - 6;
-    const labelW = 130;
-    const stripsLeft = x + 12 + labelW;
-    const stripsRight = x + w - 12;
-    const stripsWidth = stripsRight - stripsLeft;
-    const totalGap = 4 * (N_CHANNELS - 1);
-    const stripH = Math.max(
-      14,
-      Math.floor((stripsBottom - stripsTop - totalGap) / N_CHANNELS),
+    // Stash the visible row range in the active-channel-box so the
+    // mouse hover handler maps screen y → encoder row correctly.
+    activeChannelBox.firstEncoderRow = REF_ROWS;
+    activeChannelBox.visibleRowCount = visibleRowCount;
+
+    // The image rendered may be from a stale prediction (current candidate
+    // changed but new predict not yet complete). The bars panel surfaces
+    // 'predicting…' as a subtitle; here we just render whatever's in
+    // cached without ceremony.
+    //
+    // Disable bilinear smoothing while drawing the channel image. The
+    // source is 100×221 cells of discrete tensor values; default smoothing
+    // bleeds neighboring values together and softens the cell boundaries.
+    // Pixelated upscaling preserves the per-cell encoding.
+    {
+      const ctx = p.drawingContext as CanvasRenderingContext2D;
+      const prevSmoothing = ctx.imageSmoothingEnabled;
+      ctx.imageSmoothingEnabled = false;
+      // 9-arg image() draws a sub-rect of the source at a destination rect.
+      p.image(
+        cached.channelImages[activeChannel],
+        activeX, innerTop,                                // dest pos
+        activeW, activeH,                                 // dest size (stretch to fill)
+        0, REF_ROWS,                                      // source pos (skip ref rows)
+        TENSOR_W, visibleRowCount,                        // source size (drop empty bottom)
+      );
+      ctx.imageSmoothingEnabled = prevSmoothing;
+    }
+
+    // Frame the image.
+    p.noFill();
+    p.stroke(BORDER_COLOR[0], BORDER_COLOR[1], BORDER_COLOR[2]);
+    p.strokeWeight(0.5);
+    p.rect(activeX, innerTop, activeW, activeH);
+    p.noStroke();
+
+    // Predict-column marker — vertical amber line at column 110, the
+    // center of the 221-bp window where the candidate sits. Mirrors
+    // the predict marker on the top canvas so the user sees the
+    // candidate column on both sides. Drawn before the hover crosshair
+    // so the crosshair stays prominent on top when active.
+    {
+      const cellW = activeW / TENSOR_W;
+      const predictX = activeX + 110 * cellW + cellW / 2;
+      p.stroke(AMBER[0], AMBER[1], AMBER[2], 160);
+      p.strokeWeight(1.5);
+      p.line(predictX, innerTop, predictX, innerTop + activeH);
+      p.noStroke();
+    }
+
+    // Footer caption — rendered OUTSIDE the image (in the reserved
+    // FOOTER_H strip below it). Sized up so it's readable at a glance.
+    p.fill(MUTED_COLOR[0], MUTED_COLOR[1], MUTED_COLOR[2]);
+    p.textSize(13);
+    p.textAlign(p.LEFT, p.TOP);
+    const hover = sandboxState.hover;
+    let footer: string;
+    if (hover && (hover.source === 'top' || hover.channel === activeChannel)) {
+      const rowLabel = hover.readId
+        ? `read ${hover.readId.slice(-12)}`
+        : `(no read at this column)`;
+      // Top-source hovers don't sample cellValue, so omit the =NN.
+      const channelStr = hover.source === 'top'
+        ? `${CHANNEL_NAMES[activeChannel]}`
+        : `${CHANNEL_NAMES[activeChannel]}=${hover.cellValue}`;
+      footer = `pos ${hover.genomicPos + 1}  ·  ${rowLabel}  ·  ${channelStr}`;
+    } else {
+      const visibleRows = activeChannelBox.visibleRowCount;
+      footer = `${CHANNEL_NAMES[activeChannel]} · ${visibleRows} reads × 221 cells (5 ref rows + ${TENSOR_H - REF_ROWS - visibleRows} empty rows hidden)`;
+    }
+    p.text(footer, activeX, footerY);
+    p.textAlign(p.LEFT, p.CENTER);
+
+    // Toggle bar — Auto-focus and Row sort, rendered as canvas-native
+    // text toggles. Click anywhere on the label+value text to flip.
+    // Layout: each toggle's clickable rect spans label + value, with a
+    // gap between toggles. Value is amber (active selection cue).
+    toggleRects.length = 0;
+    p.textSize(13);
+    p.textAlign(p.LEFT, p.CENTER);
+    let tx = activeX;
+    const rectH = TOGGLE_H - 4;
+    const rectY = toggleY + (TOGGLE_H - rectH) / 2;
+    const cy = toggleY + TOGGLE_H / 2;
+
+    const drawToggle = (
+      kind: 'autofocus' | 'rowsort',
+      label: string,
+      value: string,
+    ): void => {
+      const labelW = p.textWidth(label);
+      const valueW = p.textWidth(value);
+      // Label in muted gray.
+      p.fill(MUTED_COLOR[0], MUTED_COLOR[1], MUTED_COLOR[2]);
+      p.text(label, tx, cy);
+      // Value in amber to indicate the current selection.
+      p.fill(AMBER[0], AMBER[1], AMBER[2]);
+      p.text(value, tx + labelW, cy);
+      // Hit rect spans the full label+value; small vertical pad for
+      // forgiveness on clicks.
+      toggleRects.push({
+        kind,
+        x: tx - 4,
+        y: rectY,
+        w: labelW + valueW + 8,
+        h: rectH,
+      });
+      tx += labelW + valueW + 28;
+    };
+
+    drawToggle(
+      'autofocus',
+      'Auto-focus: ',
+      sandboxState.autoFocus ? 'ON' : 'OFF',
+    );
+    drawToggle(
+      'rowsort',
+      'Row sort: ',
+      sandboxState.rowSort === 'dv-style' ? 'DV' : 'IGV',
     );
 
-    p.textSize(11);
-    p.noStroke();
-    for (let ch = 0; ch < N_CHANNELS; ch++) {
-      const stripY = stripsTop + ch * (stripH + 4);
-      p.fill(MUTED_COLOR[0], MUTED_COLOR[1], MUTED_COLOR[2]);
-      p.textAlign(p.RIGHT, p.CENTER);
-      p.text(CHANNEL_NAMES[ch], stripsLeft - 8, stripY + stripH / 2);
-      p.image(cached.channelImages[ch], stripsLeft, stripY, stripsWidth, stripH);
-      p.noFill();
-      p.stroke(BORDER_COLOR[0], BORDER_COLOR[1], BORDER_COLOR[2]);
-      p.strokeWeight(0.5);
-      p.rect(stripsLeft, stripY, stripsWidth, stripH);
-      p.noStroke();
+    // Subtle crosshair on the image at the hovered (col, row). Both
+    // axes use the cropped display: cells are wider than tall now that
+    // we skip ref + empty rows. Top-source hovers don't carry a
+    // channel; show the crosshair regardless of which channel is
+    // active in those cases.
+    const showCrosshair = hover && (hover.source === 'top' || hover.channel === activeChannel);
+    if (showCrosshair && hover) {
+      const cellW = activeW / TENSOR_W;
+      const cellH = activeH / activeChannelBox.visibleRowCount;
+      const pos = sandboxState.predictPos ?? 0;
+      const col = hover.genomicPos - (pos - 110);
+      const displayedRow = hover.imageRow - activeChannelBox.firstEncoderRow;
+      if (
+        col >= 0 && col < TENSOR_W &&
+        displayedRow >= 0 && displayedRow < activeChannelBox.visibleRowCount
+      ) {
+        const cx = activeX + col * cellW;
+        const cy = innerTop + displayedRow * cellH;
+        p.noFill();
+        p.stroke(AMBER[0], AMBER[1], AMBER[2], 200);
+        p.strokeWeight(1);
+        p.rect(cx, cy, Math.max(1, cellW), Math.max(1, cellH));
+        p.noStroke();
+      }
     }
   }
 
@@ -288,21 +626,24 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
     const innerRight = x + w - 12;
     const innerW = innerRight - innerLeft;
 
-    // Variant header
+    // Variant header — sized up in v6.0 so the call is unambiguous at
+    // a glance. Roughly 1.7× the previous sizes.
     const altLabel = formatAlt(c);
     p.noStroke();
     p.fill(LABEL_COLOR[0], LABEL_COLOR[1], LABEL_COLOR[2]);
-    p.textSize(13);
+    p.textSize(22);
+    p.textStyle(p.BOLD);
     p.textAlign(p.LEFT, p.TOP);
     p.text(`${c.refBase}→${altLabel}`, innerLeft, cursorY);
+    p.textStyle(p.NORMAL);
     p.fill(MUTED_COLOR[0], MUTED_COLOR[1], MUTED_COLOR[2]);
-    p.textSize(11);
+    p.textSize(16);
     p.text(
       `support ${c.supportingReads}/${c.qualifyingReads}`,
       innerLeft,
-      cursorY + 18,
+      cursorY + 30,
     );
-    cursorY += 40;
+    cursorY += 60;
 
     if (modelError) {
       drawCenteredText(
@@ -318,62 +659,200 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
       return;
     }
 
-    if (!cached || cached.candidateKey !== candidateKey()) {
-      const msg = model
-        ? predicting || pendingTimer !== null
-          ? 'predicting…'
-          : 'predicting…'
-        : 'loading model…';
+    // First-predict-of-session placeholder: only shown if we've never
+    // had a successful prediction yet. Otherwise bars stay visible from
+    // their last animated state and tween into the new prediction once
+    // it arrives.
+    if (!cached) {
       drawCenteredText(
         p,
         x,
         cursorY,
         w,
         h - (cursorY - y) - 6,
-        msg,
-        PLACEHOLDER_COLOR,
-        12,
+        'predicting…',
+        [210, 185, 130],
+        16,
       );
       return;
     }
 
-    // Softmax bars
+    // Track staleness. The actual subtitle is rendered AFTER the bars,
+    // centered horizontally below them, so it has visual weight as a
+    // status indicator on the prediction itself rather than a
+    // tiny subtitle near the header.
+    // Must mirror the predict-scheduling logic in p.draw so the subtitle
+    // appears for ALL re-encodes (candidate change AND generation
+    // bumps from Randomize / row-sort toggle).
+    const isStale =
+      cached.candidateKey !== candidateKey() ||
+      cached.generation !== sandboxState.readsGeneration ||
+      (sandboxState.predictPos !== null && cached.pos !== sandboxState.predictPos);
+
+    // Softmax bars — values + colors come from animState (lerped each
+    // frame toward `cached`). Pulse on the bar that's most amber-like.
     const classes: Genotype[] = ['hom_ref', 'het', 'hom_alt'];
-    const labelColW = 70;
-    const valueColW = 56;
+    const labelColW = 96;
+    const valueColW = 84;
     const barX = innerLeft + labelColW;
     const barW = innerW - labelColW - valueColW;
-    const barH = 14;
-    const rowH = 26;
+    const barH = 22;
+    const rowH = 38;
+    const now = performance.now();
+    // Subtle "alive" pulse on the argmax bar: alpha 0.92 ↔ 1.00 over
+    // 1.8 s. Non-argmax bars stay at full alpha.
+    const pulse = 0.96 + 0.04 * Math.sin((now * 2 * Math.PI) / 1800);
 
-    p.textSize(12);
     for (let i = 0; i < 3; i++) {
       const cls = classes[i];
-      const prob = cached.probs[i];
-      const isArgmax = cls === cached.argmax;
+      const prob = animState.probs[i];
+      const color = animState.barColors[i];
+      const amberness = amberProgress(color);
       const fillW = Math.round(barW * Math.max(0, Math.min(1, prob)));
 
-      p.fill(LABEL_COLOR[0], LABEL_COLOR[1], LABEL_COLOR[2]);
+      // Class label — fades from gray → amber as the bar gains argmax.
+      const labelColor: [number, number, number] = lerp3(
+        LABEL_COLOR,
+        AMBER as [number, number, number],
+        amberness,
+      );
+      p.fill(labelColor[0], labelColor[1], labelColor[2]);
+      p.textSize(16);
       p.textAlign(p.LEFT, p.CENTER);
       p.text(cls, innerLeft, cursorY + barH / 2);
 
-      // Bar background
+      // Bar background.
+      p.noStroke();
       p.fill(28, 28, 28);
       p.rect(barX, cursorY, barW, barH);
 
-      if (isArgmax) {
-        p.fill(ACCEPT_COLOR[0], ACCEPT_COLOR[1], ACCEPT_COLOR[2]);
+      // Bar fill.
+      const fillAlpha = amberness > 0.5 ? pulse : 1;
+      const ctx = p.drawingContext as CanvasRenderingContext2D;
+      ctx.save();
+      ctx.globalAlpha = fillAlpha;
+      if (amberness > 0.5) {
+        // Subtle vertical gradient on the argmax bar — top slightly
+        // brighter, bottom slightly darker. Adds dimension without
+        // shouting.
+        const grad = ctx.createLinearGradient(0, cursorY, 0, cursorY + barH);
+        const top = lerp3(BAR_GRAY as [number, number, number], [255, 230, 130], amberness);
+        const bot = lerp3(BAR_GRAY as [number, number, number], [220, 180, 80], amberness);
+        grad.addColorStop(0, `rgb(${top[0]|0}, ${top[1]|0}, ${top[2]|0})`);
+        grad.addColorStop(1, `rgb(${bot[0]|0}, ${bot[1]|0}, ${bot[2]|0})`);
+        ctx.fillStyle = grad;
       } else {
-        p.fill(80, 80, 80);
+        ctx.fillStyle = `rgb(${color[0]|0}, ${color[1]|0}, ${color[2]|0})`;
       }
-      p.rect(barX, cursorY, fillW, barH);
+      // Square fill — matches the rest of the visual language.
+      if (fillW > 0) ctx.fillRect(barX, cursorY, fillW, barH);
+      ctx.restore();
 
-      p.fill(MUTED_COLOR[0], MUTED_COLOR[1], MUTED_COLOR[2]);
+      // Probability value — amber-tinted + larger when this is the argmax.
+      p.fill(labelColor[0], labelColor[1], labelColor[2]);
+      p.textSize(amberness > 0.5 ? 19 : 16);
       p.textAlign(p.RIGHT, p.CENTER);
       p.text(prob.toFixed(3), innerRight, cursorY + barH / 2);
 
       cursorY += rowH;
     }
+
+    // Predicting subtitle, centered horizontally beneath the three bars.
+    // Animated alpha pulse 0.62↔1.00 over 700 ms so it reads as
+    // "thinking" rather than static text.
+    if (isStale) {
+      const now = performance.now();
+      const pulse = 0.62 + 0.38 * (0.5 + 0.5 * Math.sin((now * 2 * Math.PI) / 700));
+      p.fill(210, 185, 130, 255 * pulse);
+      p.textSize(14);
+      p.textStyle(p.NORMAL);
+      p.textAlign(p.CENTER, p.TOP);
+      p.text('predicting…', x + w / 2, cursorY + 6);
+      p.textAlign(p.LEFT, p.CENTER);
+    }
+  }
+
+  function updateHoverFromMouse(mx: number, my: number): void {
+    const box = activeChannelBox;
+    const inside =
+      box.w > 0 &&
+      box.h > 0 &&
+      mx >= box.x &&
+      mx < box.x + box.w &&
+      my >= box.y &&
+      my < box.y + box.h &&
+      cached !== null &&
+      sandboxState.predictPos !== null &&
+      box.visibleRowCount > 0;
+    if (!inside) {
+      if (sandboxState.hover !== null) sandboxState.hover = null;
+      return;
+    }
+    const pos = sandboxState.predictPos as number;
+    // Map (mx, my) → (col 0..220, displayed_row 0..visibleRowCount-1)
+    // Then shift displayed_row by firstEncoderRow to get encoder row 5..99.
+    const col = Math.max(0, Math.min(TENSOR_W - 1,
+      Math.floor(((mx - box.x) / box.w) * TENSOR_W)));
+    const displayedRow = Math.max(0, Math.min(box.visibleRowCount - 1,
+      Math.floor(((my - box.y) / box.h) * box.visibleRowCount)));
+    const row = box.firstEncoderRow + displayedRow;
+    const genomicPos = pos - 110 + col;
+
+    // Coverage check: rowToReadId[row] tells us which read sits in
+    // image-row N, but it doesn't say whether that read covers the
+    // specific column we're hovering. A read R that's 100 bp long at
+    // image-row 5 occupies row 5 entirely, but only fills 100 of the
+    // 221 cells. The other 121 cells are off-coverage (zero across all
+    // 7 channels) — semantically there is no read AT THAT PIXEL even
+    // though the row carries one. Without this check, hovering a dark
+    // off-coverage cell would light up the wrong read's outline on
+    // the top canvas.
+    let readId: string | null = (cached as CachedPrediction).rowToReadId[row] ?? null;
+    if (readId !== null && sandboxState.reads) {
+      const read = sandboxState.reads.find((r) => r.id === readId);
+      if (read) {
+        const offset = genomicPos - read.startCol;
+        if (offset < 0 || offset >= read.bases.length) {
+          // Off-coverage — null out so the top canvas doesn't outline
+          // a read that isn't actually at this cell.
+          readId = null;
+        }
+      } else {
+        readId = null;
+      }
+    }
+    // Tensor cell value at (row, col, activeChannel)
+    const tensorIdx = (row * TENSOR_W + col) * N_CHANNELS + activeChannel;
+    // Channel images carry the tensor values in their R-channel; use the
+    // pixel as a cheap read-back. (Storing the tensor itself in cached
+    // would be cleaner but doubles memory; live-read is fine.)
+    const img = (cached as CachedPrediction).channelImages[activeChannel];
+    let cellValue = 0;
+    img.loadPixels();
+    if (img.pixels && tensorIdx >= 0) {
+      const pix = (row * TENSOR_W + col) * 4;
+      cellValue = img.pixels[pix] ?? 0;
+    }
+    sandboxState.hover = {
+      source: 'bottom',
+      genomicPos,
+      imageRow: row,
+      readId,
+      cellValue,
+      channel: activeChannel,
+    };
+  }
+
+  function lerp3(
+    a: [number, number, number] | readonly [number, number, number],
+    b: [number, number, number] | readonly [number, number, number],
+    t: number,
+  ): [number, number, number] {
+    return [
+      a[0] + (b[0] - a[0]) * t,
+      a[1] + (b[1] - a[1]) * t,
+      a[2] + (b[2] - a[2]) * t,
+    ];
   }
 
   function drawPanelChrome(
@@ -414,7 +893,15 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
     p.text(msg, x + w / 2, y + h / 2);
   }
 
-  function buildChannelImages(p: p5, tensor: Float32Array): p5.Image[] {
+  /**
+   * Build the 7 grayscale channel strips. Each strip is 100×221 = 22,100
+   * RGBA pixels (~88 KB). Total ~615 KB across 7 channels. The work is
+   * mostly synchronous Uint8 writes which can pause the main thread for
+   * 5-10 ms — enough to drop a p5 frame on the top canvas. Yielding
+   * between channels lets requestAnimationFrame tick in between, keeping
+   * pan/scrub/scrubber smooth even on slower hardware.
+   */
+  async function buildChannelImages(p: p5, tensor: Float32Array): Promise<p5.Image[]> {
     const out: p5.Image[] = [];
     for (let ch = 0; ch < N_CHANNELS; ch++) {
       const img = p.createImage(TENSOR_W, TENSOR_H);
@@ -431,6 +918,13 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
       }
       img.updatePixels();
       out.push(img);
+      // Yield between channels so the top canvas's draw loop can tick.
+      // The tradeoff is the prediction panel shows "predicting…" for
+      // ~7 extra frames after the model returns, but the top canvas
+      // stays buttery.
+      if (ch < N_CHANNELS - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
     }
     return out;
   }
@@ -438,8 +932,9 @@ export function mountBottomSketch(container: HTMLElement): BottomHandle {
   return {
     destroy: () => {
       if (pendingTimer !== null) window.clearTimeout(pendingTimer);
-      if (model) model.dispose();
+      // Model is owned by main.ts; we don't dispose here.
       instance.remove();
     },
+    resize: () => resizeFn(),
   };
 }

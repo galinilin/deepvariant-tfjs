@@ -15,10 +15,45 @@
       body {
         margin: 0;
         padding: 0;
-        background: #000;
-        color: #ccc;
+        background: #010002;
+        color: #fff;
         font-family: 'Inconsolata', ui-monospace, Menlo, monospace;
         overflow: hidden;
+        /* Mirrors ANN's universal `user-select: none` rule. The
+           explainer block opts back into selectable text below. */
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+      }
+      /* v7.1 — fixed top-right link, mirrored from
+         galinilin/artificialneural.network. Sits above everything,
+         including the welcome overlay, so the source link is reachable
+         from any screen. */
+      .top-links {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 300;
+        display: flex;
+        gap: 14px;
+      }
+      .top-links a {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 44px;
+        height: 44px;
+        color: #fff;
+        text-decoration: none;
+        opacity: 0.85;
+        transition: opacity 0.15s ease;
+      }
+      .top-links a:hover { opacity: 1; }
+      .top-links svg {
+        width: 30px;
+        height: 30px;
+        display: block;
       }
       body {
         display: flex;
@@ -26,13 +61,27 @@
         height: 100vh;
       }
       #sketch-top {
-        flex: 0 0 66%;
+        flex: 0 0 var(--top-h, 66%);
         position: relative;
+        min-height: 220px;
+      }
+      #splitter {
+        flex: 0 0 6px;
+        background: #1a1a1a;
+        cursor: row-resize;
+        user-select: none;
+        position: relative;
+        z-index: 5;
+        transition: background 0.15s;
+      }
+      #splitter:hover,
+      #splitter.dragging {
+        background: #4a4a4a;
       }
       #sketch-bottom {
-        flex: 1 1 34%;
-        border-top: 1px solid #1a1a1a;
+        flex: 1 1 auto;
         position: relative;
+        min-height: 220px;
       }
       canvas {
         display: block;
@@ -59,6 +108,52 @@
         color: #fff;
         border-color: #3a3a3a;
       }
+      .debug-modal {
+        position: fixed;
+        top: 16px;
+        right: 16px;
+        z-index: 50;
+        max-width: 460px;
+        background: rgba(8, 8, 10, 0.94);
+        border: 1px solid #2a2a2a;
+        color: #d8d8d8;
+        font-family: 'Inconsolata', ui-monospace, Menlo, monospace;
+        font-size: 12px;
+        line-height: 1.55;
+        padding: 14px 16px;
+        max-height: 80vh;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        letter-spacing: 0.02em;
+      }
+      .debug-modal h3 {
+        margin: 0 0 6px 0;
+        font-size: 11px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: #888;
+        font-weight: 600;
+      }
+      .debug-modal .row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .debug-modal .row .k { color: #888; }
+      .debug-modal .row .v { color: #ededed; }
+      .debug-modal .section {
+        margin-top: 10px;
+        padding-top: 8px;
+        border-top: 1px solid #232323;
+      }
+      .debug-modal .section:first-of-type {
+        margin-top: 0;
+        padding-top: 0;
+        border-top: none;
+      }
+      .debug-modal .ok { color: #c0e090; }
+      .debug-modal .warn { color: #f0c060; }
+      .debug-modal .err { color: #e07060; }
       .tooltip {
         position: fixed;
         background: #0a0a0a;
@@ -105,16 +200,338 @@
       .tooltip .ins-seq {
         color: #b88add;
       }
+      /* ----- Welcome overlay (v5.3) ----- */
+      .hidden-until-ready {
+        visibility: hidden;
+        opacity: 0;
+      }
+      .sandbox-revealed {
+        visibility: visible;
+        opacity: 1;
+        transition: opacity 0.4s ease;
+      }
+      /* ----- Welcome overlay (v7.1) — monochrome aesthetic mirrored
+         from galinilin/artificialneural.network: #010002 background,
+         pure white text, white-bordered buttons that hard-invert and
+         scale up font-size 100→110 % on hover. ----- */
+      .welcome-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 200;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #010002;
+        padding: 40px 24px;
+        opacity: 1;
+        transition: opacity 0.3s ease;
+        overflow-y: auto;
+        scrollbar-width: none; /* Firefox */
+        -ms-overflow-style: none; /* legacy Edge/IE */
+      }
+      .welcome-overlay::-webkit-scrollbar {
+        display: none; /* WebKit (Chrome / Safari) */
+      }
+      .welcome-overlay.fade-out {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .welcome-card {
+        width: 100%;
+        color: #fff;
+        font-family: 'Inconsolata', ui-monospace, Menlo, monospace;
+        text-align: center;
+      }
+      .welcome-title {
+        margin: 0 0 8px 0;
+        font-weight: 400;
+        font-size: 34px;
+        line-height: 1.3;
+        letter-spacing: 0.01em;
+        color: #fff;
+        white-space: nowrap;
+      }
+      .welcome-title a {
+        color: inherit;
+        text-decoration-line: underline;
+        text-decoration-style: dotted;
+        text-decoration-color: rgba(255, 255, 255, 0.6);
+        text-decoration-thickness: 1.5px;
+        text-underline-offset: 6px;
+        transition: text-decoration-color 0.15s ease;
+      }
+      .welcome-title a:hover { text-decoration-color: #fff; }
+      .welcome-title .link-logo {
+        display: inline-block;
+        height: 0.85em;
+        width: auto;
+        vertical-align: -0.12em;
+        margin-right: 0.32em;
+      }
+      .welcome-options {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+        margin: 32px 0 28px;
+      }
+      /* Bottom-border-only buttons (mirrors ANN's .button-bottom-border).
+         Dimensions are pinned with width/height + flex-centering so the
+         hover font-size jump only scales the text, not the box. */
+      .welcome-btn {
+        background: transparent;
+        color: #fff;
+        border: none;
+        border-bottom: 1px solid #fff;
+        font-family: 'Inconsolata', ui-monospace, Menlo, monospace;
+        font-size: 18px;
+        font-weight: 400;
+        letter-spacing: 0.04em;
+        cursor: pointer;
+        padding: 0;
+        line-height: 1;
+        width: 280px;
+        height: 56px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+      }
+      .welcome-btn:hover:not(:disabled) {
+        background: #fff;
+        color: #010002;
+        font-size: 19.8px; /* 110 % of 18 px — text grows, box stays */
+      }
+      .welcome-btn:disabled {
+        color: grey;
+        border-bottom-color: grey;
+        pointer-events: none;
+      }
+      .welcome-btn.secondary {
+        font-size: 14px;
+        width: 220px;
+        height: 40px;
+      }
+      .welcome-btn.secondary:hover:not(:disabled) {
+        font-size: 15.4px; /* 110 % of 14 px */
+      }
+      .welcome-asterisk {
+        color: #fff;
+        opacity: 0.7;
+        font-size: 14px;
+        margin: 0;
+        max-width: 420px;
+        line-height: 1.5;
+      }
+      .welcome-status {
+        color: #fff;
+        opacity: 0.55;
+        font-size: 13px;
+        letter-spacing: 0.06em;
+        min-height: 18px;
+        margin: 4px 0 0;
+      }
+      .welcome-status.error {
+        opacity: 0.9;
+        text-decoration: underline;
+      }
+      .welcome-explain {
+        max-width: 720px;
+        margin: 32px auto 0;
+        padding-top: 22px;
+        border-top: 1px solid #2a2a2a;
+        text-align: left;
+        color: #fff;
+        font-size: 13.5px;
+        line-height: 1.75;
+        /* The only block that opts back into selectable text — the
+           explainer prose is meant to be quotable / copyable. */
+        -webkit-user-select: text;
+        -moz-user-select: text;
+        -ms-user-select: text;
+        user-select: text;
+        cursor: text;
+      }
+      .welcome-explain a { cursor: pointer; }
+      .welcome-explain p {
+        margin: 0 0 14px 0;
+        opacity: 0.85;
+      }
+      .welcome-explain p:last-child { margin-bottom: 0; }
+      .welcome-explain h2 {
+        margin: 22px 0 10px 0;
+        font-weight: 400;
+        font-size: 18px;
+        letter-spacing: 0.02em;
+        color: #fff;
+      }
+      .welcome-explain b {
+        font-weight: 400;
+        text-decoration-line: underline;
+        text-decoration-style: dotted;
+        text-decoration-color: rgba(255, 255, 255, 0.5);
+        text-decoration-thickness: 1px;
+        text-underline-offset: 4px;
+      }
+      .welcome-explain a {
+        color: #fff;
+        text-decoration-line: underline;
+        text-decoration-style: dotted;
+        text-decoration-color: rgba(255, 255, 255, 0.6);
+        text-decoration-thickness: 1px;
+        text-underline-offset: 4px;
+        transition: text-decoration-color 0.15s ease;
+      }
+      .welcome-explain a:hover { text-decoration-color: #fff; }
+      .welcome-explain-links {
+        margin-top: 22px;
+        display: flex;
+        gap: 14px;
+        align-items: center;
+      }
+      .welcome-explain-links a {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        color: #fff;
+        opacity: 0.7;
+        text-decoration: none;
+        transition: opacity 0.15s ease;
+        cursor: pointer;
+      }
+      .welcome-explain-links a:hover { opacity: 1; }
+      .welcome-explain-links svg {
+        width: 20px;
+        height: 20px;
+        display: block;
+      }
     </style>
   </head>
   <body>
-    <div id="sketch-top"></div>
-    <div id="sketch-bottom"></div>
-    <div class="corner-buttons">
-      <button id="randomize" class="reset-btn" type="button">Randomize</button>
+    <!-- v7.1 — persistent source link, mirrored from
+         galinilin/artificialneural.network's top-links pattern. -->
+    <div class="top-links">
+      <a
+        href="https://github.com/galinilin/deepvariant-tfjs"
+        target="_blank"
+        rel="noopener"
+        title="Source on GitHub"
+        aria-label="Source on GitHub"
+      >
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56v-2c-3.2.7-3.87-1.36-3.87-1.36-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.75 2.68 1.24 3.34.95.1-.74.4-1.24.73-1.53-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.18-3.1-.12-.29-.51-1.46.11-3.05 0 0 .96-.31 3.15 1.18.92-.26 1.9-.39 2.88-.4.98.01 1.96.14 2.88.4 2.19-1.49 3.15-1.18 3.15-1.18.62 1.59.23 2.76.11 3.05.74.81 1.18 1.84 1.18 3.1 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.06.78 2.13v3.16c0 .31.21.67.8.56 4.57-1.52 7.86-5.83 7.86-10.91C23.5 5.65 18.35.5 12 .5z"/></svg>
+      </a>
+    </div>
+    <div id="sketch-top" class="hidden-until-ready"></div>
+    <div id="splitter" class="hidden-until-ready" title="Drag to resize"></div>
+    <div id="sketch-bottom" class="hidden-until-ready"></div>
+    <div class="corner-buttons hidden-until-ready">
+      <button id="prev-cand" class="reset-btn" type="button" title="Previous candidate (←)">◀ Prev</button>
+      <button id="next-cand" class="reset-btn" type="button" title="Next candidate (→)">Next ▶</button>
+      <button id="randomize" class="reset-btn" type="button" title="Random candidate (R)">Randomize</button>
       <button id="reset-view" class="reset-btn" type="button">Reset view</button>
+      <button id="toggle-debug" class="reset-btn" type="button" title="Toggle debug modal (D)">Debug</button>
     </div>
     <div id="read-tooltip" class="tooltip"></div>
+    <div id="debug-modal" class="debug-modal" style="display:none"></div>
+
+    <!-- v7.1 — welcome / loading overlay in the artificialneural.network
+         monochrome aesthetic. Shown on first paint; main.ts hides it
+         once the user clicks Launch Sandbox and the sketches mount. -->
+    <div id="welcome-overlay" class="welcome-overlay">
+      <div class="welcome-card">
+        <h1 class="welcome-title">
+          <a href="https://github.com/google/deepvariant" target="_blank" rel="noopener"><img class="link-logo" src="logos/dv_icon.png" alt="" aria-hidden="true">DeepVariant</a>, in your browser via <a href="https://github.com/tensorflow/tfjs" target="_blank" rel="noopener"><svg class="link-logo" viewBox="0 0 24 24" fill="#FF6F00" aria-hidden="true"><path d="M1.292 5.856L11.54 0v24l-4.095-2.378V7.603l-6.168 3.564.015-5.31zm21.43 5.311l-.014-5.31L12.46 0v24l4.095-2.378V14.87l3.092 1.788-.018-4.618-3.074-1.756V7.603l6.168 3.564z"/></svg>tensorflow.js</a>
+        </h1>
+
+        <div class="welcome-options">
+          <button id="start-synthetic" class="welcome-btn" type="button">
+            Launch Sandbox
+          </button>
+          <p class="welcome-asterisk">
+            * loads a ~22 MB model on click.
+          </p>
+          <div class="welcome-status" id="welcome-status"></div>
+
+          <button id="show-explain" class="welcome-btn secondary" type="button">
+            What even is this?
+          </button>
+        </div>
+
+        <div class="welcome-explain" id="welcome-explain" style="display:none">
+          <p>
+            This project runs Google's DeepVariant v1.8 WGS model
+            end-to-end in your browser. The candidate engine, the
+            seven-channel pileup encoder, and the backbone
+            InceptionV3 network itself are all here, in TypeScript
+            + tfjs. No server.
+          </p>
+          <p>
+            I quantized the released checkpoint down to uint8 to
+            shrink it to ~22&nbsp;MB, ran parity tests against
+            upstream, and the predictions match within rounding
+            noise. Inference runs on your device through tfjs's
+            WebGL backend.
+          </p>
+
+          <h2>Why does this exist?</h2>
+          <p>
+            Over the last year or so I have been exploring where
+            deep learning meets biology, and DeepVariant felt like
+            the cleanest thing to start from: a CNN doing real,
+            useful work, used in real clinical pipelines, with a
+            paper trail you can sit down and read. While digging
+            into how variant-calling gets reframed as image
+            classification, I stumbled into the official blog post
+            <a href="https://google.github.io/deepvariant/posts/2020-02-20-looking-through-deepvariants-eyes/" target="_blank" rel="noopener">Looking Through DeepVariant's Eyes</a>
+            and got the urge to build a live version of it.
+          </p>
+          <p>
+            I wanted to take it apart and make it easily traceable,
+            instead of just calling <code>.predict()</code> on a
+            black box. So I rebuilt the encoder and wrapped a
+            visualization layer around it. That turned into this
+            sandbox.
+          </p>
+          <p>
+            The data within the sandbox is generated synthetically.
+            Each time you click Randomize I regenerate a
+            ~1500&nbsp;bp reference, drop in a handful of scenarios
+            (het / hom_alt SNVs, small indels, low-quality cases),
+            and simulate reads that cover them, so the model is
+            real, the data feeding it is fabricated, and the placed
+            scenarios act as ground truth.
+          </p>
+          <p>
+            Some years ago I built a similar in-browser sandbox
+            called
+            <a href="https://github.com/galinilin/artificialneural.network" target="_blank" rel="noopener">artificialneural.network</a>
+            — a toy neural net you can configure layer by layer,
+            compile against a sample dataset, train step by step,
+            and click any neuron to inspect its weights. That one
+            was a way to visualize and teach how an MLP actually
+            moves while it learns. This is what happens when you
+            point the same instinct: interactive, in-browser,
+            p5 + tfjs, every step legible, at a real production
+            model.
+          </p>
+
+          <div class="welcome-explain-links">
+            <a href="https://github.com/galinilin" target="_blank" rel="noopener" title="GitHub" aria-label="GitHub">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56v-2c-3.2.7-3.87-1.36-3.87-1.36-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.75 2.68 1.24 3.34.95.1-.74.4-1.24.73-1.53-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.18-3.1-.12-.29-.51-1.46.11-3.05 0 0 .96-.31 3.15 1.18.92-.26 1.9-.39 2.88-.4.98.01 1.96.14 2.88.4 2.19-1.49 3.15-1.18 3.15-1.18.62 1.59.23 2.76.11 3.05.74.81 1.18 1.84 1.18 3.1 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.06.78 2.13v3.16c0 .31.21.67.8.56 4.57-1.52 7.86-5.83 7.86-10.91C23.5 5.65 18.35.5 12 .5z"/></svg>
+            </a>
+            <a href="https://x.com/galinilin" target="_blank" rel="noopener" title="X" aria-label="X">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+            </a>
+            <a href="https://www.linkedin.com/in/galiun" target="_blank" rel="noopener" title="LinkedIn" aria-label="LinkedIn">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.063 2.063 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

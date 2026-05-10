@@ -1,8 +1,10 @@
-import { mountTopSketch, type HoverInfo } from './sketch/top';
-import { mountBottomSketch } from './sketch/bottom';
+import { mountTopSketch, type HoverInfo, type SketchHandle } from './sketch/top';
+import { mountBottomSketch, type BottomHandle } from './sketch/bottom';
 import { formatAlt, type CandidateOutcome } from './lib/candidate';
 import { encodePileup, validateEncodedTensor } from './lib/pileup-encoder';
 import { sandboxState } from './lib/sandbox-state';
+import { buildWorld } from './lib/world-builder';
+import { mountDebugModal } from './sketch/debug-modal';
 
 // Debug helpers exposed on window for ad-hoc inspection from the browser
 // console. Run e.g. `dvDebug.predictColumnStats()` to see what the
@@ -19,12 +21,13 @@ import { sandboxState } from './lib/sandbox-state';
     if (!sandboxState.reads || !sandboxState.reference || sandboxState.predictPos === null || !sandboxState.candidate) {
       return null;
     }
-    return encodePileup(
+    const enc = encodePileup(
       sandboxState.reads,
       sandboxState.reference,
       sandboxState.predictPos,
       sandboxState.candidate,
     );
+    return enc?.tensor ?? null;
   },
   validate: () => {
     const t = (globalThis as unknown as { dvDebug: { encode: () => Float32Array | null } }).dvDebug.encode();
@@ -68,18 +71,175 @@ import { sandboxState } from './lib/sandbox-state';
   },
 };
 
-const topEl = document.getElementById('sketch-top');
-const bottomEl = document.getElementById('sketch-bottom');
-if (!topEl || !bottomEl) throw new Error('missing sketch containers');
+const topElMaybe = document.getElementById('sketch-top');
+const bottomElMaybe = document.getElementById('sketch-bottom');
+if (!topElMaybe || !bottomElMaybe) throw new Error('missing sketch containers');
+const topEl: HTMLElement = topElMaybe;
+const bottomEl: HTMLElement = bottomElMaybe;
 
-const top = mountTopSketch(topEl);
-mountBottomSketch(bottomEl);
+// v7.0: welcome screen → single Synthetic launch tile. Model + world
+// build kick off when the user clicks; nothing downloads on page open.
+// `?autostart=1` skips the picker for deep-linking.
+const params = new URLSearchParams(window.location.search);
+const autostart = params.get('autostart') === '1' || params.get('world') === 'synthetic';
 
-const resetBtn = document.getElementById('reset-view');
-resetBtn?.addEventListener('click', () => top.resetView());
+let top: SketchHandle | null = null;
+let bottom: BottomHandle | null = null;
 
-const randomizeBtn = document.getElementById('randomize');
-randomizeBtn?.addEventListener('click', () => top.randomize());
+const welcomeEl = document.getElementById('welcome-overlay');
+const welcomeStatus = document.getElementById('welcome-status');
+const synthBtn = document.getElementById('start-synthetic') as HTMLButtonElement | null;
+const explainBtn = document.getElementById('show-explain');
+const explainEl = document.getElementById('welcome-explain');
+
+// v5.3: lazy model load. The 22 MB checkpoint download only starts when
+// the user commits to a mode, not on page open. Visitors who never click
+// pay nothing. Buttons are enabled immediately; clicking either kicks off
+// the load + warmup + world build pipeline with live status.
+let modelLoadInFlight:
+  | Promise<import('./lib/DeepVariantModel').DeepVariantModel>
+  | null = null;
+
+async function loadModel(): Promise<
+  import('./lib/DeepVariantModel').DeepVariantModel
+> {
+  if (modelLoadInFlight) return modelLoadInFlight;
+  const { DeepVariantModel } = await import('./lib/DeepVariantModel');
+  let lastPercent = -1;
+  modelLoadInFlight = DeepVariantModel.load({
+    onProgress: (frac) => {
+      const pct = Math.floor(frac * 100);
+      if (pct !== lastPercent && welcomeStatus) {
+        welcomeStatus.textContent = `Loading model… ${pct}%`;
+        lastPercent = pct;
+      }
+    },
+    onStage: (stage) => {
+      if (!welcomeStatus) return;
+      if (stage === 'warming') welcomeStatus.textContent = 'Compiling shaders…';
+      else if (stage === 'ready') welcomeStatus.textContent = 'Building world…';
+    },
+  });
+  // If the load rejects, clear the cache so a retry click can try again.
+  modelLoadInFlight.catch(() => {
+    modelLoadInFlight = null;
+  });
+  return modelLoadInFlight;
+}
+
+explainBtn?.addEventListener('click', () => {
+  if (!explainEl) return;
+  const showing = explainEl.style.display !== 'none';
+  explainEl.style.display = showing ? 'none' : 'block';
+});
+
+synthBtn?.addEventListener('click', () => void startWorld());
+if (autostart) void startWorld();
+
+async function startWorld(): Promise<void> {
+  if (synthBtn) synthBtn.disabled = true;
+  if (welcomeStatus) welcomeStatus.classList.remove('error');
+
+  try {
+    const world = buildWorld({ seed: 42 });
+    const model = await loadModel();
+
+    document.querySelectorAll('.hidden-until-ready').forEach((el) => {
+      (el as HTMLElement).classList.add('sandbox-revealed');
+    });
+
+    top = mountTopSketch(topEl, world);
+    bottom = mountBottomSketch(bottomEl, model);
+    attachUiHandlers(top);
+
+    if (welcomeEl) {
+      welcomeEl.classList.add('fade-out');
+      setTimeout(() => welcomeEl.remove(), 320);
+    }
+  } catch (err) {
+    if (welcomeStatus) {
+      welcomeStatus.textContent = `Failed to start: ${err instanceof Error ? err.message : 'unknown'}`;
+      welcomeStatus.classList.add('error');
+    }
+    if (synthBtn) synthBtn.disabled = false;
+  }
+}
+
+mountDebugModal();
+
+// v6.2 — vertical splitter between top and bottom canvases. Drag the
+// thin bar to resize. The CSS exposes the top height via --top-h on
+// the root; we set it in pixels during drag (clamped to keep both
+// panels usable). After each move we manually trigger each sketch's
+// resize() so p5 re-fits its canvas to the new container size.
+{
+  const splitter = document.getElementById('splitter');
+  if (splitter) {
+    let dragging = false;
+    splitter.addEventListener('mousedown', (ev) => {
+      ev.preventDefault();
+      dragging = true;
+      splitter.classList.add('dragging');
+      document.body.style.cursor = 'row-resize';
+    });
+    window.addEventListener('mousemove', (ev) => {
+      if (!dragging) return;
+      const totalH = window.innerHeight;
+      const splitterH = 6;
+      const minTop = 220;
+      const minBottom = 220;
+      let topH = ev.clientY;
+      topH = Math.max(minTop, Math.min(totalH - splitterH - minBottom, topH));
+      document.documentElement.style.setProperty('--top-h', `${topH}px`);
+      // Resize the canvases on each move so the drag feels live.
+      top?.resize();
+      bottom?.resize();
+    });
+    window.addEventListener('mouseup', () => {
+      if (!dragging) return;
+      dragging = false;
+      splitter.classList.remove('dragging');
+      document.body.style.cursor = '';
+      // One final resize after release in case the last move was clamped.
+      top?.resize();
+      bottom?.resize();
+    });
+  }
+}
+
+function rerollWorld(handle: SketchHandle): void {
+  const seed = Math.floor(Math.random() * 0x7fffffff) || 1;
+  handle.setWorld(buildWorld({ seed }));
+}
+
+function attachUiHandlers(handle: SketchHandle): void {
+  const resetBtn = document.getElementById('reset-view');
+  resetBtn?.addEventListener('click', () => handle.resetView());
+
+  const randomizeBtn = document.getElementById('randomize');
+  randomizeBtn?.addEventListener('click', () => rerollWorld(handle));
+
+  const prevCandBtn = document.getElementById('prev-cand');
+  prevCandBtn?.addEventListener('click', () => handle.prevCandidate());
+
+  const nextCandBtn = document.getElementById('next-cand');
+  nextCandBtn?.addEventListener('click', () => handle.nextCandidate());
+
+  // v6.1: Auto-focus and Row sort toggles moved into the bottom canvas
+  // (drawn beneath the active channel image, hit-tested in
+  // bottom.ts mousePressed). HTML buttons removed.
+
+  // Keyboard navigation: ←/→ for candidate stepping, 'r' for re-roll.
+  // Skip when the user is typing in an input.
+  window.addEventListener('keydown', (ev) => {
+    if (ev.target instanceof HTMLInputElement || ev.target instanceof HTMLTextAreaElement) {
+      return;
+    }
+    if (ev.key === 'ArrowLeft') handle.prevCandidate();
+    else if (ev.key === 'ArrowRight') handle.nextCandidate();
+    else if (ev.key === 'r' || ev.key === 'R') rerollWorld(handle);
+  });
+}
 
 const tooltip = document.getElementById('read-tooltip');
 let isDragging = false;
@@ -96,9 +256,12 @@ if (tooltip) {
     const rect = topEl.getBoundingClientRect();
     const sx = ev.clientX - rect.left;
     const sy = ev.clientY - rect.top;
+    if (!top) return;
     const info = top.hoverInfo(sx, sy);
     if (!info) {
       tooltip.style.display = 'none';
+      // Clear any top-source hover so the bottom canvas crosshair fades.
+      if (sandboxState.hover?.source === 'top') sandboxState.hover = null;
       return;
     }
     tooltip.innerHTML = formatTooltip(info);
@@ -116,9 +279,34 @@ if (tooltip) {
     tooltip.style.left = `${leftPx}px`;
     tooltip.style.top = `${topPx}px`;
     tooltip.style.display = 'block';
+
+    // Mirror the hover into shared state so the bottom canvas can light
+    // up the corresponding (col, row) crosshair on its active channel.
+    // We only write if the hovered read is actually present in the
+    // current encoder image (passed mapq + base-Q filters); otherwise
+    // the linkage doesn't exist on the bottom side.
+    const map = sandboxState.latestRowToReadId;
+    if (map) {
+      const imageRow = map.indexOf(info.readId);
+      if (imageRow >= 0) {
+        sandboxState.hover = {
+          source: 'top',
+          genomicPos: info.absCol,
+          imageRow,
+          readId: info.readId,
+          cellValue: 0, // not sampled from this side
+          channel: -1, // top doesn't track the active channel
+        };
+      } else if (sandboxState.hover?.source === 'top') {
+        // The read is filtered out of the encoder image — clear stale
+        // top-source hover.
+        sandboxState.hover = null;
+      }
+    }
   });
   topEl.addEventListener('mouseleave', () => {
     tooltip.style.display = 'none';
+    if (sandboxState.hover?.source === 'top') sandboxState.hover = null;
   });
 }
 

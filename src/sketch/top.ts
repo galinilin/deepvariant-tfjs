@@ -21,14 +21,13 @@ import {
   paintReadsBases,
 } from '../world/regions/reads';
 import {
-  DEFAULT_REFERENCE_LENGTH,
   WINDOW_LENGTH,
-  buildReference,
   clampWindowStart,
   defaultWindowStart,
 } from '../lib/reference';
-import { buildReads, makeRng, MAX_PACKED_ROWS, type Read } from '../lib/reads';
-import { placeScenarios, type Scenario } from '../lib/scenarios';
+import { MAX_PACKED_ROWS, type Read } from '../lib/reads';
+import type { Scenario } from '../lib/scenarios';
+import type { World } from '../lib/world-builder';
 import {
   deriveCandidateOutcome,
   formatAlt,
@@ -67,16 +66,30 @@ export interface SketchHandle {
   resetView: () => void;
   randomize: () => void;
   hoverInfo: (sx: number, sy: number) => HoverInfo | null;
+  /** Snap the predict window to the next/previous DV-emitted candidate
+   * (or 'het'/'het_del' synthetic scenario). Returns the new index, or
+   * -1 if no scenarios. */
+  nextCandidate: () => number;
+  prevCandidate: () => number;
+  /** Replace the current world (reference + reads + scenarios). Used by
+   * the Randomize button to regenerate the sandbox with a fresh seed. */
+  setWorld: (world: World) => void;
+  /** Manually trigger a canvas resize. Called from main.ts after the
+   * vertical splitter is dragged so the canvas matches its container. */
+  resize: () => void;
   destroy: () => void;
 }
 
 const REF_GAP = 80;
 const READS_GAP = 18;
-const INITIAL_SEED = 42;
 
-export function mountTopSketch(container: HTMLElement): SketchHandle {
+export function mountTopSketch(container: HTMLElement, initialWorld: World): SketchHandle {
   let resetFn: () => void = () => {};
   let randomizeFn: () => void = () => {};
+  let resizeFn: () => void = () => {};
+  let nextCandidateFn: () => number = () => -1;
+  let prevCandidateFn: () => number = () => -1;
+  let setWorldFn: (w: World) => void = () => {};
   let camRef: Camera | null = null;
   let readsRef: Read[] = [];
   let referenceRef: Base[] = [];
@@ -92,23 +105,13 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
     const cam = new Camera();
     camRef = cam;
 
-    let reference: Base[] = [];
-    let scenarios: Scenario[] = [];
-    let reads: Read[] = [];
+    let reference: Base[] = initialWorld.reference;
+    let scenarios: Scenario[] = initialWorld.scenarios;
+    let reads: Read[] = initialWorld.reads;
+    let activeCandidateIdx = 0;
     let windowStart = 0;
-
-    const generateWorld = (seed: number) => {
-      const rng = makeRng(seed);
-      reference = buildReference(DEFAULT_REFERENCE_LENGTH, seed);
-      scenarios = placeScenarios(reference, rng);
-      reads = buildReads(reference, scenarios, rng);
-      referenceRef = reference;
-      readsRef = reads;
-    };
-
-    generateWorld(INITIAL_SEED);
-    windowStart = defaultWindowStart(reference.length);
-    windowStartRef.value = windowStart;
+    referenceRef = reference;
+    readsRef = reads;
 
     const refWidth = REF_COUNT * CELL_W;
     const fullPileupWidth = reference.length * CELL_W;
@@ -135,6 +138,99 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
       width: scrubberWidth,
       scenarios,
     });
+
+    // v6.0 — when the user hovers a pixel in the bottom canvas's active
+    // channel, the top canvas pans + zooms slightly to center on the
+    // corresponding (column, read row). On unhover the camera lerps back
+    // to whatever state it was in before the hover started. Any direct
+    // user input (pan, zoom, reset) cancels the lock so it doesn't
+    // fight what the user is doing.
+    let savedCam: { x: number; y: number; zoom: number } | null = null;
+    let camLastFrameMs = 0;
+    const HOVER_ZOOM_FACTOR = 1.3;
+    const CAM_TC_MS = 70;
+
+    const releaseSavedCam = (): void => {
+      savedCam = null;
+      camLastFrameMs = 0;
+    };
+
+    const targetCamForHover = (
+      hover: import('../lib/sandbox-state').ChannelHover,
+      baseZoom: number,
+    ): { x: number; y: number; zoom: number } | null => {
+      // Only auto-focus when there's a specific read to focus on. Off-
+      // coverage cells (hover.readId === null) leave the camera frozen
+      // — without this guard we'd fall back to "reads region center"
+      // which feels arbitrary.
+      if (!hover.readId) return null;
+      const colInWindow = hover.genomicPos - windowStart;
+      if (colInWindow < 0 || colInWindow >= WINDOW_LENGTH) return null;
+      const r = reads.find((rd) => rd.id === hover.readId);
+      if (!r || r.row >= MAX_PACKED_ROWS) return null;
+      const wx = refOrigin.x + colInWindow * CELL_W + CELL_W / 2;
+      const wy = readsOrigin.y + r.row * READ_ROW_H + READ_ROW_H / 2;
+      const targetZoom = Math.min(cam.maxZoom, baseZoom * HOVER_ZOOM_FACTOR);
+      return {
+        x: p.width / 2 - wx * targetZoom,
+        y: p.height / 2 - wy * targetZoom,
+        zoom: targetZoom,
+      };
+    };
+
+    const tickCameraForHover = (): void => {
+      // Toggle off: snap back to saved (if any) and bail. The hover
+      // record can still drive the visual highlights elsewhere.
+      if (!sandboxState.autoFocus) {
+        if (savedCam) {
+          cam.x = savedCam.x;
+          cam.y = savedCam.y;
+          cam.zoom = savedCam.zoom;
+          savedCam = null;
+        }
+        return;
+      }
+
+      const hover = sandboxState.hover;
+      // Skip auto-focus when the hover came from the top canvas itself.
+      // The user's cursor is already positioned at the read; panning the
+      // camera there would chase the cursor in a circular fashion.
+      const treatedHover = hover && hover.source !== 'top' ? hover : null;
+      if (treatedHover && savedCam === null) {
+        savedCam = { x: cam.x, y: cam.y, zoom: cam.zoom };
+      }
+      let target: { x: number; y: number; zoom: number } | null = null;
+      if (treatedHover && savedCam) {
+        target = targetCamForHover(treatedHover, savedCam.zoom);
+      } else if (savedCam) {
+        target = savedCam;
+      }
+      if (!target) return;
+
+      const now = performance.now();
+      const dt =
+        camLastFrameMs === 0 ? 16 : Math.min(100, now - camLastFrameMs);
+      camLastFrameMs = now;
+      const alpha = 1 - Math.exp(-dt / CAM_TC_MS);
+      cam.x += (target.x - cam.x) * alpha;
+      cam.y += (target.y - cam.y) * alpha;
+      cam.zoom += (target.zoom - cam.zoom) * alpha;
+
+      // Restore saved cam when there's no auto-focus-relevant hover.
+      // (top-source hovers are treated as "no hover" for camera purposes.)
+      if (!treatedHover && savedCam) {
+        if (
+          Math.abs(cam.x - savedCam.x) < 0.5 &&
+          Math.abs(cam.y - savedCam.y) < 0.5 &&
+          Math.abs(cam.zoom - savedCam.zoom) < 0.001
+        ) {
+          cam.x = savedCam.x;
+          cam.y = savedCam.y;
+          cam.zoom = savedCam.zoom;
+          savedCam = null;
+        }
+      }
+    };
 
     const setWindow = (next: number) => {
       const clamped = clampWindowStart(next, reference.length);
@@ -175,8 +271,16 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
       const ch = totalHeight * cam.zoom;
       cam.x = (w - cw) / 2;
       cam.y = (h - ch) / 2;
-      windowStart = defaultWindowStart(reference.length);
-      windowStartRef.value = windowStart;
+      releaseSavedCam();
+      // On first paint, snap the window to the first candidate so the user
+      // immediately sees a real DV-emitted variant. Falls back to centered
+      // window if the world has no scenarios.
+      if (scenarios.length > 0) {
+        snapToCandidate(0);
+      } else {
+        windowStart = defaultWindowStart(reference.length);
+        windowStartRef.value = windowStart;
+      }
     };
 
     resetFn = () => initializeView();
@@ -191,30 +295,68 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
       paintReadsBases(readsCache, reads, reference, CELL_W);
     };
 
-    const randomize = () => {
-      const seed = Math.floor(Math.random() * 0x7fffffff) || 1;
-      generateWorld(seed);
+    const snapToCandidate = (idx: number) => {
+      if (scenarios.length === 0) return;
+      const wrapped = ((idx % scenarios.length) + scenarios.length) % scenarios.length;
+      activeCandidateIdx = wrapped;
+      const pick = scenarios[wrapped];
+      windowStart = clampWindowStart(
+        pick.position - Math.floor(WINDOW_LENGTH / 2),
+        reference.length,
+      );
+      windowStartRef.value = windowStart;
+    };
 
+    const randomize = () => {
+      // Jump to a random candidate inside the current world. The
+      // top-level Randomize button in main.ts goes further and
+      // regenerates the world via setWorld(); this in-sketch version
+      // is kept as the cheaper "shuffle which variant is centered" op.
+      if (scenarios.length === 0) return;
+      const idx = Math.floor(Math.random() * scenarios.length);
+      snapToCandidate(idx);
+      sandboxState.readsGeneration += 1;
+    };
+
+    const nextCandidate = (): number => {
+      if (scenarios.length === 0) return -1;
+      snapToCandidate(activeCandidateIdx + 1);
+      sandboxState.readsGeneration += 1;
+      return activeCandidateIdx;
+    };
+
+    const prevCandidate = (): number => {
+      if (scenarios.length === 0) return -1;
+      snapToCandidate(activeCandidateIdx - 1);
+      sandboxState.readsGeneration += 1;
+      return activeCandidateIdx;
+    };
+
+    const setWorld = (w: World) => {
+      reference = w.reference;
+      scenarios = w.scenarios;
+      reads = w.reads;
+      referenceRef = reference;
+      readsRef = reads;
+      activeCandidateIdx = 0;
+      // NOTE: ref-cache size is fixed at p5 setup based on reference.length.
+      // Reroll keeps the same length (synthetic default), so the cache
+      // sizing stays valid across setWorld calls.
       if (scenarios.length > 0) {
-        const pick = scenarios[Math.floor(Math.random() * scenarios.length)];
-        windowStart = clampWindowStart(
-          pick.position - Math.floor(WINDOW_LENGTH / 2),
-          reference.length,
-        );
+        snapToCandidate(0);
       } else {
         windowStart = defaultWindowStart(reference.length);
+        windowStartRef.value = windowStart;
       }
-      windowStartRef.value = windowStart;
-
       refCache?.invalidate();
       buildReadsCache();
-
-      // Bump the generation counter so the bottom canvas knows to
-      // invalidate any cached prediction tied to the previous reads set.
       sandboxState.readsGeneration += 1;
     };
 
     randomizeFn = randomize;
+    nextCandidateFn = nextCandidate;
+    prevCandidateFn = prevCandidate;
+    setWorldFn = setWorld;
 
     const drawWindowFunnel = () => {
       const winLeft =
@@ -267,6 +409,58 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
         x,
         top,
       );
+    };
+
+    // v6.0: when the user hovers a pixel in the bottom canvas's active
+    // channel, sandboxState.hover carries the (genomicPos, readId)
+    // pair. Render a soft amber column highlight at the genomic
+    // position and outline the matching read (if any) so the link
+    // between channel pixel and underlying read is obvious.
+    const drawChannelHover = () => {
+      const hover = sandboxState.hover;
+      if (!hover) return;
+      // Column → x in world coords. The reads cache + ref strip both
+      // span [windowStart, windowStart + WINDOW_LENGTH). Outside that
+      // range we don't draw (off-screen).
+      const colInWindow = hover.genomicPos - windowStart;
+      if (colInWindow < 0 || colInWindow >= WINDOW_LENGTH) return;
+      const x = refOrigin.x + colInWindow * CELL_W + CELL_W / 2;
+      const top = refOrigin.y - 2;
+      const bottom = readsOrigin.y + readsHeight + 2;
+      // Vertical column line through Ref + Reads.
+      p.stroke(255, 220, 110, 180);
+      p.strokeWeight(1.2 / cam.zoom);
+      p.line(x, top, x, bottom);
+      p.noStroke();
+
+      // Read outline — bracket the matched read. The reads cache is
+      // rendered as the [windowStart, windowStart+WINDOW_LENGTH) slice
+      // into [readsOrigin.x, readsOrigin.x+refWidth], so display-space
+      // x = readsOrigin.x + (read.startCol - windowStart) * CELL_W.
+      // Clip to the visible window so reads partially off-screen draw
+      // a tight outline against just the visible portion.
+      if (hover.readId) {
+        const winLeftX = readsOrigin.x;
+        const winRightX = readsOrigin.x + WINDOW_LENGTH * CELL_W;
+        for (const read of reads) {
+          if (read.id !== hover.readId) continue;
+          if (read.row >= MAX_PACKED_ROWS) break;
+          const rxRaw = readsOrigin.x + (read.startCol - windowStart) * CELL_W;
+          const rwRaw = read.bases.length * CELL_W;
+          const rx = Math.max(rxRaw, winLeftX);
+          const rRight = Math.min(rxRaw + rwRaw, winRightX);
+          const rw = rRight - rx;
+          if (rw <= 0) break;
+          const ry = readsOrigin.y + read.row * READ_ROW_H;
+          const rh = READ_ROW_H;
+          p.noFill();
+          p.stroke(255, 220, 110, 220);
+          p.strokeWeight(1 / cam.zoom);
+          p.rect(rx, ry, rw, rh);
+          p.noStroke();
+          break;
+        }
+      }
     };
 
     const drawSupportsMarkers = (candidate: Candidate, predictPos: number) => {
@@ -351,10 +545,12 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
       });
     };
 
-    p.windowResized = () => {
+    const doResize = () => {
       const { w, h } = size();
       p.resizeCanvas(w, h);
     };
+    p.windowResized = doResize;
+    resizeFn = doResize;
 
     p.draw = () => {
       const predictPos = windowStart + Math.floor(WINDOW_LENGTH / 2);
@@ -368,6 +564,8 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
       sandboxState.predictPos = predictPos;
       const predictX =
         refOrigin.x + Math.floor(WINDOW_LENGTH / 2) * CELL_W + CELL_W / 2;
+
+      tickCameraForHover();
 
       p.background(0);
       p.push();
@@ -420,6 +618,7 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
       drawSupportsMarkers(candidate, predictPos);
       drawPredictMarker();
       drawPredictLabel(predictX, outcome);
+      drawChannelHover();
 
       p.pop();
     };
@@ -440,6 +639,8 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
         handleScrubberWorldX(wp.x);
       } else {
         cam.pan(p.movedX, p.movedY);
+        // User taking direct control — release any pending hover lock.
+        releaseSavedCam();
       }
     };
 
@@ -448,6 +649,7 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
       event.preventDefault();
       const factor = event.deltaY > 0 ? 0.9 : 1.1;
       cam.zoomAt(p.mouseX, p.mouseY, factor);
+      releaseSavedCam();
     };
   }, container);
 
@@ -510,6 +712,10 @@ export function mountTopSketch(container: HTMLElement): SketchHandle {
     resetView: () => resetFn(),
     randomize: () => randomizeFn(),
     hoverInfo,
+    nextCandidate: () => nextCandidateFn(),
+    prevCandidate: () => prevCandidateFn(),
+    setWorld: (w: World) => setWorldFn(w),
+    resize: () => resizeFn(),
     destroy: () => instance.remove(),
   };
 }
