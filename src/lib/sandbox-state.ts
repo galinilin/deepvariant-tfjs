@@ -76,7 +76,7 @@ export const sandboxState: {
   predictPos: null,
   readsGeneration: 0,
   hover: null,
-  autoFocus: true,
-  rowSort: 'igv-aligned',
+  autoFocus: false,
+  rowSort: 'dv-style',
   latestRowToReadId: null,
 };

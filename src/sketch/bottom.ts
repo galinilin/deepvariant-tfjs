@@ -604,6 +604,62 @@ export function mountBottomSketch(
         p.noStroke();
       }
     }
+
+    // Explainer tooltip when the row-sort toggle is hovered. Drawn
+    // last so it sits on top of any panel chrome.
+    const rowsortRect = toggleRects.find((t) => t.kind === 'rowsort');
+    if (
+      rowsortRect &&
+      p.mouseX >= rowsortRect.x &&
+      p.mouseX < rowsortRect.x + rowsortRect.w &&
+      p.mouseY >= rowsortRect.y &&
+      p.mouseY < rowsortRect.y + rowsortRect.h
+    ) {
+      drawRowSortTooltip(p, rowsortRect.x, rowsortRect.y);
+    }
+  }
+
+  function drawRowSortTooltip(p: p5, anchorX: number, anchorY: number): void {
+    const lines: string[] = [
+      'Row sort — how reads are ordered in the pileup tensor',
+      '',
+      "DV:  matches DeepVariant's production sort,",
+      '     the diagonal stripe seen in DV blog images.',
+      'IGV: aligns encoder rows with the top-canvas',
+      '     IGV-pack order.',
+    ];
+    p.textSize(12);
+    p.textAlign(p.LEFT, p.CENTER);
+    let maxW = 0;
+    for (const l of lines) maxW = Math.max(maxW, p.textWidth(l));
+    const padX = 14;
+    const padY = 10;
+    const lineH = 16;
+    const w = Math.ceil(maxW) + padX * 2;
+    const h = lines.length * lineH + padY * 2;
+
+    const canvasW = p.width;
+    let x = anchorX;
+    let y = anchorY - h - 8;
+    if (x + w > canvasW - 8) x = canvasW - w - 8;
+    if (x < 8) x = 8;
+    if (y < 8) y = anchorY + 28;
+
+    p.noStroke();
+    p.fill(10, 10, 10, 245);
+    p.rect(x, y, w, h);
+    p.stroke(BORDER_COLOR[0], BORDER_COLOR[1], BORDER_COLOR[2]);
+    p.noFill();
+    p.rect(x, y, w, h);
+
+    p.noStroke();
+    for (let i = 0; i < lines.length; i++) {
+      // First line is the header (label color); the rest is muted body.
+      const isHeader = i === 0;
+      const c = isHeader ? LABEL_COLOR : MUTED_COLOR;
+      p.fill(c[0], c[1], c[2]);
+      p.text(lines[i], x + padX, y + padY + lineH / 2 + i * lineH);
+    }
   }
 
   function drawPredictionPanel(
