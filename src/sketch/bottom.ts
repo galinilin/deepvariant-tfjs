@@ -597,10 +597,19 @@ export function mountBottomSketch(
       ) {
         const cx = activeX + col * cellW;
         const cy = innerTop + displayedRow * cellH;
+        const rectW = Math.max(1, cellW);
+        const rectH = Math.max(1, cellH);
+        // Dark halo first — gives the amber outline contrast on bright
+        // pileup cells (e.g. high base_intensity / mapping_quality).
         p.noFill();
-        p.stroke(AMBER[0], AMBER[1], AMBER[2], 200);
+        p.stroke(0, 0, 0, 230);
+        p.strokeWeight(3);
+        p.rect(cx, cy, rectW, rectH);
+        // Amber line on top — pops on dark cells, sits on the halo on
+        // bright cells, so it stays legible across the whole image.
+        p.stroke(AMBER[0], AMBER[1], AMBER[2], 255);
         p.strokeWeight(1);
-        p.rect(cx, cy, Math.max(1, cellW), Math.max(1, cellH));
+        p.rect(cx, cy, rectW, rectH);
         p.noStroke();
       }
     }
