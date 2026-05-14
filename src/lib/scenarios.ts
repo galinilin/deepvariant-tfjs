@@ -105,12 +105,12 @@ function buildScenario(
 
   const delLength =
     type === 'het_del' || type === 'hom_alt_del'
-      ? 1 + Math.floor(rng() * 3)
+      ? 1 + Math.floor(rng() * 10)
       : undefined;
 
   const insLength =
     type === 'het_ins' || type === 'hom_alt_ins'
-      ? 1 + Math.floor(rng() * 3)
+      ? 1 + Math.floor(rng() * 10)
       : undefined;
 
   return { position, type, altBase, altBase2, delLength, insLength };
