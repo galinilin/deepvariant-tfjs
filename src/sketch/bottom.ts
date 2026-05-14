@@ -623,18 +623,21 @@ export function mountBottomSketch(
     const lines: string[] = [
       'Row sort — how reads are ordered in the pileup tensor',
       '',
-      "DV:  matches DeepVariant's production sort,",
-      '     the diagonal stripe seen in DV blog images.',
-      'IGV: aligns encoder rows with the top-canvas',
-      '     IGV-pack order.',
+      'DV (default) is the sort the model was trained on,',
+      'so predictions are most accurate. Produces the',
+      'diagonal stripe seen in DV blog images.',
+      '',
+      'IGV aligns encoder rows with the top-canvas IGV',
+      'pack order. Easier to follow visually, but the',
+      'model may give slightly different output.',
     ];
-    p.textSize(12);
+    p.textSize(14);
     p.textAlign(p.LEFT, p.CENTER);
     let maxW = 0;
     for (const l of lines) maxW = Math.max(maxW, p.textWidth(l));
-    const padX = 14;
-    const padY = 10;
-    const lineH = 16;
+    const padX = 16;
+    const padY = 12;
+    const lineH = 20;
     const w = Math.ceil(maxW) + padX * 2;
     const h = lines.length * lineH + padY * 2;
 
